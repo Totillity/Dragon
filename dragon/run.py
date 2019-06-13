@@ -70,8 +70,9 @@ def compile_program(program: ast.Program, file_name: Path, compiler='clang'):
     dragon_c = str(c_files / "dragon.c")
     list_c = str(c_files / "list.c")
 
-    result = os.system(f"{compiler} -O3 -I/Users/MagilanS/PycharmProjects/Dragon2 -o {file_name.with_suffix('')} "
+    result = os.system(f"{compiler} -O3 -o {file_name.with_suffix('')} "
                        f"{file_name.with_suffix('.c')} {dragon_c} {list_c}")
+
     if result != 0:
         CompilingError("Error during compiling generated C code", 0, (0, 0)).finish(str(file_name), "")
 
