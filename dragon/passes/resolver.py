@@ -40,9 +40,10 @@ class Environment:
         self.types.pop()
         return self.vars.pop()
 
-    def new_var(self, var: str, type: cgen.Type, builtin=False) -> str:
+    def new_var(self, var: str, type: cgen.Type, builtin=False, c_name=None) -> str:
         if builtin:
-            c_name = var
+            if c_name is None:
+                c_name = var
         else:
             c_name = self.next(var)
         self.vars[-1][var] = VarMeta(c_name, type)
@@ -92,6 +93,8 @@ class Resolver(Visitor):
         self.names.new_var("print_int", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
         self.names.new_var("print_str", cgen.PointerType(cgen.FunctionType([cgen.StringType()], cgen.VoidType())), builtin=True)
         self.names.new_var("print", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.VoidType())), builtin=True)
+        self.names.new_var("clock", cgen.PointerType(cgen.FunctionType([], cgen.IntType())), builtin=True,
+                           c_name='dragon_clock')
 
         for top_level in node.top_level:
             if isinstance(top_level, ast.Function):
@@ -101,7 +104,7 @@ class Resolver(Visitor):
                 c_name = self.names.new_var(top_level.name, type)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
-                top_level.meta["args"] = {self.names.next(arg_name): arg_type
+                top_level.meta["args"] = {arg_name: arg_type
                                           for arg_name, arg_type
                                           in zip(top_level.args.keys(), cast(cgen.FunctionType, type.pointee).args)}
                 # noinspection PyUnresolvedReferences
@@ -215,7 +218,11 @@ class Resolver(Visitor):
 
         type = node.meta["type"]
         returns = []
-        self.names.new_scope({arg: c_arg for arg, (c_arg, _) in zip(node.args, node.meta["args"].items())})
+        self.names.new_scope()
+
+        c_names = self.names.extend_vars({arg: typ for arg, typ in node.meta["args"].items()})
+        node.meta["c args"] = dict(zip(c_names, node.meta["args"].values()))
+
         for stmt in node.body:
             returns.extend(self.visit(stmt))
         self.names.end_scope()
@@ -225,7 +232,19 @@ class Resolver(Visitor):
         cls = self.visit(node.cls)
         node.meta["cls"] = cls
         node.meta["args"] = [self.visit(arg) for arg in node.args]
+        node.meta["ret"] = cls
         return []
+
+    def visit_IfStmt(self, node: ast.IfStmt):
+        cond = self.visit(node.cond)
+        returns = self.visit(node.then_do) + self.visit(node.else_do)
+        return returns
+
+    def visit_Block(self, node: ast.Block):
+        returns = []
+        for stmt in node.stmts:
+            returns.extend(self.visit(stmt))
+        return returns
 
     def visit_VarStmt(self, node: ast.VarStmt):
         type = self.visit(node.typ)
@@ -285,6 +304,28 @@ class Resolver(Visitor):
         node.meta["args"] = [self.visit(arg) for arg in node.args]
         node.meta["ret"] = func_type.pointee.ret
         return func_type.pointee.ret
+
+    def visit_BinOp(self, node: ast.BinOp):
+        def is_int(typ):
+            return isinstance(typ, cgen.IntType)
+
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        if node.op in ("+", "-", "*", "/"):
+            if is_int(left) and is_int(right):
+                ret = cgen.IntType()
+            else:
+                raise NotImplementedError(left, right, node.op)
+        elif node.op in ("<", ">", ">=", "<=", "==", "!="):
+            if is_int(left) and is_int(right):
+                ret = cgen.BoolType()
+            else:
+                raise NotImplementedError(left, right, node.op)
+        else:
+            raise NotImplementedError(left, right, node.op)
+
+        node.meta["ret"] = ret
+        return ret
 
     def visit_Literal(self, node: ast.Literal):
         if node.type == "num":

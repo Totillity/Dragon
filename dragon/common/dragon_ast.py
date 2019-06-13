@@ -9,7 +9,7 @@ __all__ = ['Node',
            'Expr', 'Call', 'Literal', 'GetVar', 'BinOp',
            'GetAttr', 'SetAttr', 'SetVar', 'Cast', 'Grouping', 'New', 'Unary',
 
-           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt',
+           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt', 'Block', 'IfStmt',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
@@ -134,6 +134,18 @@ class SetAttr(Expr):
 @dataclass()
 class Stmt(Node):
     pass
+
+
+@dataclass()
+class Block(Stmt):
+    stmts: List[Stmt]
+
+
+@dataclass()
+class IfStmt(Stmt):
+    cond: Expr
+    then_do: Stmt
+    else_do: Stmt
 
 
 @dataclass()

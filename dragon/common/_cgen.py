@@ -198,6 +198,11 @@ class IntType(DataType):
 
 
 @dataclass()
+class BoolType(DataType):
+    typ = "bool"
+
+
+@dataclass()
 class CharType(DataType):
     typ = "char"
 
@@ -286,9 +291,23 @@ class If(Statement):
     else_do: Statement
 
     def generate(self, indent=0):
-        ret = "    "*indent + f"if ({self.cond.generate()})"
-        body = self.then_do.generate()
-        raise NotImplementedError()
+        ret = "    " * indent + f"if ({self.cond.generate()}) "
+        if isinstance(self.then_do, Block):
+            ret += self.then_do.generate(indent).lstrip()
+            ret += " else "
+        else:
+            ret += "\n"
+            ret += self.then_do.generate(indent + 1)
+            ret += "\n" + "    " * indent + "else "
+
+        if isinstance(self.else_do, Block):
+            # ret += " "
+            ret += self.else_do.generate(indent).lstrip()
+        else:
+            ret += "\n"
+            ret += self.else_do.generate(indent + 1)
+
+        return ret
 
 
 @dataclass()
@@ -299,7 +318,11 @@ class While(Statement):
 
 @dataclass()
 class Block(Statement):
-    stmts: List[Expression]
+    stmts: List[Statement]
+
+    def generate(self, indent=0):
+        stmts = [''] + [stmt.generate(indent + 1) for stmt in self.stmts] + ['']
+        return "    " * indent + "{" + "\n".join(stmts) + "    " * indent + "}"
 
 
 @dataclass()

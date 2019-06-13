@@ -18,7 +18,7 @@ class Stream:
         self.tokens = tokens
 
     @property
-    def curr(self):
+    def curr(self) -> Token:
         return self.tokens[0]
 
     def advance(self):
@@ -236,8 +236,38 @@ class Parser:
             return Parser.parse_var_stmt(stream)
         elif stream.curr.type == "return":
             return Parser.parse_return_stmt(stream)
+        elif stream.curr.type == "if":
+            return Parser.parse_if_stmt(stream)
+        elif stream.curr.type == "{":
+            return Parser.parse_block(stream)
         else:
             return Parser.parse_expr_stmt(stream)
+
+    @staticmethod
+    @parsing_method
+    def parse_block(stream: Stream):
+        stream, _ = stream.expect("{")
+        body = []
+        while not stream.curr.type == "}":
+            stream, stmt = Parser.parse_statement(stream)
+            body.append(stmt)
+        stream, _ = stream.expect("}")
+        return stream, Block(body)
+
+    @staticmethod
+    @parsing_method
+    def parse_if_stmt(stream: Stream):
+        stream, _ = stream.expect("if")
+        stream, _ = stream.expect("(")
+        stream, cond = Parser.parse_expr(stream)
+        stream, _ = stream.expect(")")
+        stream, then_do = Parser.parse_statement(stream)
+        if stream.curr.type == 'else':
+            stream, _ = stream.expect("else")
+            stream, else_do = Parser.parse_statement(stream)
+        else:
+            else_do = Block([])
+        return stream, IfStmt(cond, then_do, else_do)
 
     @staticmethod
     @parsing_method
@@ -306,7 +336,7 @@ class Parser:
             start = stream.curr.line, stream.curr.pos
             stream, op = stream.advance()
             stream, right = lower(stream)
-            expr = BinOp(left=expr, op=op, right=right)
+            expr = BinOp(left=expr, op=op.text, right=right)
             expr.place(*start)
         return stream, expr
 

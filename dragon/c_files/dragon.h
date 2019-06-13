@@ -54,4 +54,6 @@ void print(struct Object*);
 void print_str(char*);
 void print_int(int);
 
+int dragon_clock();
+
 #endif

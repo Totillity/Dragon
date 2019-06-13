@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct Object;
 
@@ -99,7 +100,7 @@ void print(struct Object* _obj) {
     struct String* str = _obj->to_string(_obj->self);
 
     // puts(str->str);
-    printf("%s", str->str);
+    printf("%s\n", str->str);
 }
 
 
@@ -109,4 +110,11 @@ void print_str(char* obj) {
 
 void print_int(int obj) {
     printf("%i", obj);
+}
+
+
+int dragon_clock() {
+    // int t = clock() / CLOCKS_PER_SEC;
+    // printf("time: %f\n", ((double) clock()) / CLOCKS_PER_SEC);
+    return clock() * 1000 / CLOCKS_PER_SEC;
 }

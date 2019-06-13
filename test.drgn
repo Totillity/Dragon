@@ -1,39 +1,22 @@
 
-class Person {
-    attr name: str;
-    attr age: int;
-
-    method say_hi(to: str) -> void {
-        print("Hi, ");
-        print(to);
-        print(", I'm ");
-        print(self.name);
-        print("\n");
-    }
+def fibo(n: int) -> int {
+    if (n < 2)
+        return n;
+    else
+        return fibo(n-1) + fibo(n-2);
 }
 
 
-class RealPerson(Person) {
-
-}
-
-
-class Holder {
-    attr person: Person;
+class Dude {
 }
 
 
 def main() -> int {
-    var holder: Holder = new Holder();
+    var start: int = clock();
+    print(fibo(35));
+    var end: int = clock();
 
-    var bob: RealPerson = new RealPerson();
-    bob.name = "Bob";
-    bob.age = 7;
-    bob.say_hi("Jane");
-
-    holder.person = bob;
-
-    holder.person.say_hi("Jane");
+    print(end - start);
 
     return 0;
 }

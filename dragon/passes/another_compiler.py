@@ -1,4 +1,6 @@
-from typing import cast, Dict, Type
+import os
+import pathlib
+from typing import Dict, Type
 
 from dragon.common import ast, DragonError, cgen, Visitor
 from dragon.passes.resolver import Resolver
@@ -13,7 +15,13 @@ class Compiler(Visitor):
         self.main_func = ''
 
     def visit_Program(self, node: ast.Program):
-        top_levels = [cgen.Include("stdio.h"), cgen.Include("stdlib.h"), cgen.Include("dragon.h", angled=False), cgen.Include("list.h", angled=False)]
+        c_files = pathlib.Path(os.path.realpath(__file__)).parent.parent / "c_files"
+
+        dragon_h = str(c_files / "dragon.h")
+        list_h = str(c_files / "list.h")
+
+        top_levels = [cgen.Include("stdio.h"), cgen.Include("stdlib.h"),
+                      cgen.Include(dragon_h, angled=False), cgen.Include(list_h, angled=False)]
 
         for top_level in node.top_level:
             top_levels += self.visit(top_level)
@@ -151,7 +159,13 @@ class Compiler(Visitor):
         body = []
         for stmt in node.body:
             body.append(self.visit(stmt))
-        return [cgen.Function(node.meta["c_name"], node.meta["args"], node.meta["ret"], body)]
+        return [cgen.Function(node.meta["c_name"], node.meta["c args"], node.meta["ret"], body)]
+
+    def visit_IfStmt(self, node: ast.IfStmt):
+        return cgen.If(self.visit(node.cond), self.visit(node.then_do), self.visit(node.else_do))
+
+    def visit_Block(self, node: ast.Block):
+        return cgen.Block([self.visit(stmt) for stmt in node.stmts])
 
     def visit_VarStmt(self, node: ast.VarStmt):
         return cgen.Declare(node.meta["type"], node.meta["c_name"], self.visit(node.val))
@@ -217,6 +231,9 @@ class Compiler(Visitor):
         expected = cls.get_name(node.attr)
         coerced = self.coerce_node(node.val, expected)
         return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr, coerced)
+
+    def visit_BinOp(self, node: ast.BinOp):
+        return cgen.BinOp(self.visit(node.left), node.op, self.visit(node.right))
 
     def visit_Literal(self, node: ast.Literal):
         return cgen.Constant(node.meta["val"])
