@@ -1,4 +1,21 @@
 
+#macro $( for($init:stmt $cond:expr; $each:expr) $body:stmt )$ => stmt:
+       $( {
+              $init
+              while ($cond) {
+                  $body
+                  $each;
+              }
+          } )$
+#endmacro
+
+#macro $( DOUBLE($val:expr) )$ => expr: $( $val + 2 )$ #endmacro
+
+
+#macro $( SAY_HI )$ => expr: $( print("hi") )$ #endmacro
+
+
+
 def fibo(n: int) -> int {
     if (n < 2)
         return n;
@@ -12,11 +29,18 @@ class Dude {
 
 
 def main() -> int {
-    var start: int = clock();
-    print(fibo(35));
-    var end: int = clock();
+    # var start: int = clock();
+    # print(fibo(35));
+    # var end: int = clock();
 
-    print(end - start);
+    # print(end - start);
+
+    for (var i: int = 0; i < 10; i = i + 1) {
+        print(i);
+    }
+
+    print(DOUBLE(3) * 4);
+    SAY_HI;
 
     return 0;
 }

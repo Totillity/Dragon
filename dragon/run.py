@@ -66,7 +66,7 @@ def generate_program(program: ast.Program, file_name: Path):
 
 def compile_program(program: ast.Program, file_name: Path, compiler='clang'):
     generate_program(program, file_name)
-    c_files = Path(os.path.realpath(__file__)).parent / "c_files"
+    c_files = Path(os.path.realpath(__file__)).parent / "std_files"
     dragon_c = str(c_files / "dragon.c")
     list_c = str(c_files / "list.c")
 

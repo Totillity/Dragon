@@ -240,6 +240,11 @@ class Resolver(Visitor):
         returns = self.visit(node.then_do) + self.visit(node.else_do)
         return returns
 
+    def visit_WhileStmt(self, node: ast.WhileStmt):
+        cond = self.visit(node.cond)
+        returns = self.visit(node.body)
+        return returns
+
     def visit_Block(self, node: ast.Block):
         returns = []
         for stmt in node.stmts:
@@ -266,6 +271,12 @@ class Resolver(Visitor):
         node.meta["ret"] = data.type
         node.meta["c_name"] = data.c_name
         return data.type
+
+    def visit_SetVar(self, node: ast.SetVar):
+        data = self.names.get_var(node.var)
+        self.visit(node.val)
+        node.meta["ret"] = data.type
+        node.meta["c_name"] = data.c_name
 
     def visit_GetAttr(self, node: ast.GetAttr):
         obj_type = self.visit(node.obj)

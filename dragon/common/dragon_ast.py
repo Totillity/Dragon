@@ -9,7 +9,7 @@ __all__ = ['Node',
            'Expr', 'Call', 'Literal', 'GetVar', 'BinOp',
            'GetAttr', 'SetAttr', 'SetVar', 'Cast', 'Grouping', 'New', 'Unary',
 
-           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt', 'Block', 'IfStmt',
+           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt', 'Block', 'IfStmt', 'WhileStmt',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
@@ -146,6 +146,12 @@ class IfStmt(Stmt):
     cond: Expr
     then_do: Stmt
     else_do: Stmt
+
+
+@dataclass()
+class WhileStmt(Stmt):
+    cond: Expr
+    body: Stmt
 
 
 @dataclass()

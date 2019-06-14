@@ -23,7 +23,7 @@ class SetVar(Expression):
     val: Expression
 
     def generate(self):
-        return f"{self.var} = {self.val.generate()}"
+        return f"({self.var} = {self.val.generate()})"
 
 
 @dataclass()
@@ -33,7 +33,7 @@ class SetArrow(Expression):
     val: Expression
 
     def generate(self):
-        return f"{self.struct_p.generate()}->{self.attr} = {self.val.generate()}"
+        return f"({self.struct_p.generate()}->{self.attr} = {self.val.generate()})"
 
 
 @dataclass()
@@ -43,7 +43,7 @@ class SetAttr(Expression):
     val: Expression
 
     def generate(self):
-        return f"{self.struct.generate()}.{self.attr} = {self.val.generate()}"
+        return f"({self.struct.generate()}.{self.attr} = {self.val.generate()})"
 
 
 @dataclass()
@@ -53,7 +53,7 @@ class BinOp(Expression):
     right: Expression
 
     def generate(self):
-        return f"{self.left.generate()} {self.op} {self.right.generate()}"
+        return f"({self.left.generate()} {self.op} {self.right.generate()})"
 
 
 @dataclass()
@@ -314,6 +314,15 @@ class If(Statement):
 class While(Statement):
     cond: Expression
     do: Statement
+
+    def generate(self, indent=0):
+        ret = "    " * indent + f"while ({self.cond.generate()}) "
+        if isinstance(self.do, Block):
+            ret += self.do.generate(indent).lstrip()
+        else:
+            ret += "\n"
+            ret += self.do.generate(indent + 1)
+        return ret
 
 
 @dataclass()

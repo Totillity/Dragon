@@ -15,12 +15,12 @@ class Compiler(Visitor):
         self.main_func = ''
 
     def visit_Program(self, node: ast.Program):
-        c_files = pathlib.Path(os.path.realpath(__file__)).parent.parent / "c_files"
+        c_files = pathlib.Path(os.path.realpath(__file__)).parent.parent / "std_files"
 
         dragon_h = str(c_files / "dragon.h")
         list_h = str(c_files / "list.h")
 
-        top_levels = [cgen.Include("stdio.h"), cgen.Include("stdlib.h"),
+        top_levels = [cgen.Include("stdio.h"), cgen.Include("stdlib.h"), cgen.Include("stdbool.h"),
                       cgen.Include(dragon_h, angled=False), cgen.Include(list_h, angled=False)]
 
         for top_level in node.top_level:
@@ -164,6 +164,9 @@ class Compiler(Visitor):
     def visit_IfStmt(self, node: ast.IfStmt):
         return cgen.If(self.visit(node.cond), self.visit(node.then_do), self.visit(node.else_do))
 
+    def visit_WhileStmt(self, node: ast.WhileStmt):
+        return cgen.While(self.visit(node.cond), self.visit(node.body))
+
     def visit_Block(self, node: ast.Block):
         return cgen.Block([self.visit(stmt) for stmt in node.stmts])
 
@@ -221,6 +224,9 @@ class Compiler(Visitor):
 
     def visit_GetVar(self, node: ast.GetVar):
         return cgen.GetVar(node.meta["c_name"])
+
+    def visit_SetVar(self, node: ast.SetVar):
+        return cgen.SetVar(node.meta["c_name"], self.visit(node.val))
 
     def visit_GetAttr(self, node: ast.GetAttr):
         cls: cgen.ClassType = node.obj.meta["ret"]
