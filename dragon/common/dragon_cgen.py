@@ -82,6 +82,17 @@ class ClassType(DataType):
                     pass
             raise KeyError(name)
 
+    def path_to_parent(self, typ: 'ClassType'):
+        if typ is self:
+            return [self]
+        else:
+            for base in self.bases:
+                try:
+                    return base.path_to_parent(typ) + [self]
+                except KeyError:
+                    pass
+            raise KeyError(typ)
+
     def cast_expr(self, obj: Expression, typ: 'ClassType'):
         if typ is self:
             return obj
@@ -115,6 +126,9 @@ class ClassType(DataType):
 
         for base in self.bases:
             yield from base.all_methods()
+
+    def __repr__(self):
+        return f"ClassType({self.name})"
 
     @property
     def fields(self):

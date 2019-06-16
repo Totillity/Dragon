@@ -127,9 +127,8 @@ class Resolver(Visitor):
         self.names.new_type("void", cgen.VoidType())
         self.names.new_type("Object", cgen.Object)
         self.names.new_type("Integer", cgen.Integer)
+        self.names.new_type("String", cgen.String)
 
-        # self.names.new_var("print_int", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
-        # self.names.new_var("print_str", cgen.PointerType(cgen.FunctionType([cgen.StringType()], cgen.VoidType())), builtin=True)
         self.names.new_var("print", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.VoidType())), builtin=True)
         self.names.new_var("clock", cgen.PointerType(cgen.FunctionType([], cgen.IntType())), builtin=True,
                            c_name='dragon_clock')
@@ -214,11 +213,12 @@ class Resolver(Visitor):
                 cls_type.other["new"] = type
                 cls_type.c_names["new"] = c_name
 
+                body_stmt.meta["cls"] = cls_type
                 body_stmt.meta["type"] = type
                 body_stmt.meta["c_name"] = c_name
-                body_stmt.meta["args"] = {self.names.next(arg_name): arg_type
-                                          for arg_name, arg_type
-                                          in zip(body_stmt.args.keys(), args)}
+                body_stmt.meta["other args"] = {arg_name: arg_type
+                                                for arg_name, arg_type
+                                                in zip(body_stmt.args.keys(), args)}
                 body_stmt.meta["ret"] = ret
             else:
                 raise Exception(body_stmt)
@@ -256,6 +256,19 @@ class Resolver(Visitor):
         # for ret in returns:
         #     if ret != type.ret:
         #         raise ResolvingError(f"Expected return of {type.ret}, got a possible {ret}", node.line, node.pos)
+
+    def visit_Constructor(self, node: ast.Constructor):
+        type = node.meta["type"]
+        self.names.new_scope()
+        # self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
+        self.names.new_var('self', node.meta["cls"], builtin=True)
+        c_names = self.names.extend_vars(node.meta["other args"])
+
+        node.meta["args"] = {**dict(zip(c_names, node.meta["other args"].values()))}
+
+        for stmt in node.body:
+            self.visit(stmt)
+        self.names.end_scope()
 
     def visit_Function(self, node: ast.Function):
         if node.name == "main" and len(self.names.vars) == 1:
@@ -380,10 +393,16 @@ class Resolver(Visitor):
             else:
                 raise NotImplementedError(left, right, node.op)
         else:
-            raise NotImplementedError(left, right, node.op)
+            raise Exception(f"Unsupported operation: {node.op}")
 
         node.meta["ret"] = ret
         return ret
+
+    def visit_Cast(self, node: ast.Cast):
+        to_type = self.visit(node.type)
+        self.visit(node.obj)
+        node.meta["ret"] = to_type
+        return to_type
 
     def visit_Literal(self, node: ast.Literal):
         if node.type == "num":
@@ -397,3 +416,7 @@ class Resolver(Visitor):
         else:
             raise Exception(node)
 
+    def visit_Grouping(self, node: ast.Grouping):
+        contents = self.visit(node.expr)
+        node.meta["ret"] = contents
+        return contents

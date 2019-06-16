@@ -1,18 +1,32 @@
 
 
-class Holder<T> {
-    attr contents: T;
+class Test {
+    attr num: int;
+
+    new(num: int) {
+        self.num = num;
+    }
 }
 
 
+class Test2 (Test) {
+    attr thing: int;
+
+    new(num: int, thing: int) {
+        self.num = num;
+        self.thing = thing;
+    }
+}
+
+
+
 def main() -> int {
-    var holder: Holder<Integer> = new Holder<Integer>();
-    holder.contents = 3;
-    var holder_holder: Holder<Holder<Integer>> = new Holder<Holder<Integer>>();
-    holder_holder.contents = holder;
+    var test2: Test2 = new Test2(3, 7);
+    var test: Test = test2;
 
-    print(holder.contents);
-    print(holder_holder.contents.contents);
-
+    print(test2.num);
+    print(test.num);
+    print(test2.thing);
+    print((test as Test2).thing);
     return 0;
 }

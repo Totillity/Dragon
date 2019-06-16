@@ -158,6 +158,15 @@ class Compiler(Visitor):
             body.append(self.visit(stmt))
         return [cgen.Function(node.meta["c_name"], node.meta["args"], node.meta["ret"], body)]
 
+    def visit_Constructor(self, node: ast.Constructor):
+        body = []
+        cls_type = node.meta["cls"]
+        body.append(cgen.Declare(node.meta["cls"], "self", cgen.Call(cgen.GetVar("new_empty_" + cls_type.name), [])))
+        for stmt in node.body:
+            body.append(self.visit(stmt))
+        body.append(cgen.Return(cgen.GetVar("self")))
+        return [cgen.Function(node.meta["c_name"], node.meta["args"], node.meta["cls"], body)]
+
     def visit_Function(self, node: ast.Function):
         if node.meta["is main"]:
             self.main_func = node.meta["c_name"]
@@ -177,7 +186,7 @@ class Compiler(Visitor):
         return cgen.Block([self.visit(stmt) for stmt in node.stmts])
 
     def visit_VarStmt(self, node: ast.VarStmt):
-        return cgen.Declare(node.meta["type"], node.meta["c_name"], self.visit(node.val))
+        return cgen.Declare(node.meta["type"], node.meta["c_name"], self.coerce_node(node.val, node.meta["type"]))
 
     def visit_ExprStmt(self, node: ast.ExprStmt):
         return cgen.ExprStmt(self.visit(node.expr))
@@ -194,6 +203,7 @@ class Compiler(Visitor):
             if from_type is to_type:
                 return expr
             else:
+
                 return cgen.Ref(from_type.cast_expr(cgen.Deref(expr), to_type))
         else:
             if isinstance(from_type, to_type.__class__):
@@ -232,7 +242,7 @@ class Compiler(Visitor):
         return cgen.GetVar(node.meta["c_name"])
 
     def visit_SetVar(self, node: ast.SetVar):
-        return cgen.SetVar(node.meta["c_name"], self.visit(node.val))
+        return cgen.SetVar(node.meta["c_name"], self.coerce_node(node.val, node.meta["ret"]))
 
     def visit_GetAttr(self, node: ast.GetAttr):
         cls: cgen.ClassType = node.obj.meta["ret"]
@@ -247,8 +257,34 @@ class Compiler(Visitor):
     def visit_BinOp(self, node: ast.BinOp):
         return cgen.BinOp(self.visit(node.left), node.op, self.visit(node.right))
 
+    def visit_Cast(self, node: ast.Cast):
+        try:
+            return self.coerce_node(node.obj, node.meta["ret"])
+        except KeyError:
+            # now force an upcast by calling up enough times to cast to the correct type,
+            # but this will cause an error if the actual type is incorrect
+            to_type = node.meta["ret"]
+            obj = self.visit(node.obj)
+            from_type = node.obj.meta["ret"]
+            if not isinstance(to_type, cgen.ClassType):
+                # TODO: Error message
+                raise Exception()
+            path = to_type.path_to_parent(from_type)[1:]
+
+            # obj = cgen.Deref(obj)
+
+            for base in path:
+                obj = cgen.Cast(cgen.GetArrow(obj, 'up'), base)
+
+            # obj = cgen.Ref(obj)
+
+            return obj
+
     def visit_Literal(self, node: ast.Literal):
         return cgen.Constant(node.meta["val"])
+
+    def visit_Grouping(self, node: ast.Grouping):
+        return self.visit(node.expr)
 
 
 def compile_drgn(tree):
