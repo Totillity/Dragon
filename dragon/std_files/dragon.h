@@ -1,6 +1,9 @@
 #ifndef DRAGON_OBJECT_H
 #define DRAGON_OBJECT_H
 
+#include <stdbool.h>
+#include <stdlib.h>
+
 struct BaseObject {
     void* self;
     void* up;
@@ -34,6 +37,9 @@ struct Integer {
 
     int num;
 };
+
+
+bool is_null(struct Object*);
 
 
 void new_parent_Object(struct Object*, void*, void*);

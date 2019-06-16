@@ -1,6 +1,7 @@
 #include "dragon.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 
@@ -9,6 +10,10 @@ struct Object;
 struct String;
 
 struct Integer;
+
+bool is_null(struct Object* obj) {
+    return obj->self == NULL;
+}
 
 
 struct String* Object_to_string(void* _self) {
@@ -101,15 +106,7 @@ void print(struct Object* _obj) {
 
     // puts(str->str);
     printf("%s\n", str->str);
-}
-
-
-void print_str(char* obj) {
-    printf("%s", obj);
-}
-
-void print_int(int obj) {
-    printf("%i", obj);
+    fflush(stdout);
 }
 
 

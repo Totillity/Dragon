@@ -128,10 +128,14 @@ class Resolver(Visitor):
         self.names.new_type("Object", cgen.Object)
         self.names.new_type("Integer", cgen.Integer)
         self.names.new_type("String", cgen.String)
+        self.names.new_type("_Array", cgen.C_Array)
 
         self.names.new_var("print", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.VoidType())), builtin=True)
         self.names.new_var("clock", cgen.PointerType(cgen.FunctionType([], cgen.IntType())), builtin=True,
                            c_name='dragon_clock')
+        self.names.new_var("exit", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
+        self.names.new_var("is_null", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.BoolType())), builtin=True)
+        self.names.new_var("null", cgen.NullType(), builtin=True, c_name='NULL')
 
         for top_level in node.top_level:
             if isinstance(top_level, ast.Function):
@@ -327,13 +331,20 @@ class Resolver(Visitor):
         return [self.visit(node.expr)]
 
     def visit_GetVar(self, node: ast.GetVar):
-        data = self.names.get_var(node.var)
+        try:
+            data = self.names.get_var(node.var)
+        except KeyError:
+            raise ResolvingError(f"Name {node.var} is not defined", node.line, node.pos)
         node.meta["ret"] = data.type
         node.meta["c_name"] = data.c_name
         return data.type
 
     def visit_SetVar(self, node: ast.SetVar):
-        data = self.names.get_var(node.var)
+        try:
+            data = self.names.get_var(node.var)
+        except KeyError:
+            raise ResolvingError(f"Name {node.var} is not defined", node.line,
+                                 (node.pos[0], node.pos[0] + len(node.var)))
         self.visit(node.val)
         node.meta["ret"] = data.type
         node.meta["c_name"] = data.c_name
@@ -380,6 +391,9 @@ class Resolver(Visitor):
         def is_int(typ):
             return isinstance(typ, cgen.IntType)
 
+        def is_null(typ):
+            return isinstance(typ, cgen.NullType)
+
         left = self.visit(node.left)
         right = self.visit(node.right)
         if node.op in ("+", "-", "*", "/"):
@@ -389,6 +403,8 @@ class Resolver(Visitor):
                 raise NotImplementedError(left, right, node.op)
         elif node.op in ("<", ">", ">=", "<=", "==", "!="):
             if is_int(left) and is_int(right):
+                ret = cgen.BoolType()
+            elif is_null(left) or is_null(right):
                 ret = cgen.BoolType()
             else:
                 raise NotImplementedError(left, right, node.op)

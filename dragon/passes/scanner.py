@@ -43,6 +43,7 @@ keywords = [
 
 letters = "abcdefghijklmnopqrstuvwxyz"
 letters += letters.upper()
+letters += "_"
 
 digits = "0123456789"
 

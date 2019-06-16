@@ -149,11 +149,23 @@ class GenericClassType(DataType):
         self.generics: Dict[Tuple[str, ...], ClassType] = {}
 
 
+class NullType(DataType):
+    typ = "int"
+
+
 Object = ClassType("Object", [])
 
 Integer = ClassType("Integer", [Object])
 String = ClassType("String", [Object])
+C_Array = ClassType("_Array", [Object])
 
 
 Object.methods = {"to_string": PointerType(FunctionType([Object], String))}
 Object.c_names = {"to_string": "Object_to_string"}
+
+C_Array.methods = {"get_item": PointerType(FunctionType([C_Array, IntType()], Object)),
+                   "set_item": PointerType(FunctionType([C_Array, IntType(), Object], VoidType()))}
+C_Array.other = {"new": PointerType(FunctionType([IntType()], C_Array))}
+C_Array.c_names = {"get_item": "_Array_get_item",
+                   "set_item": "_Array_set_item",
+                   "new": "new__Array"}

@@ -1,32 +1,57 @@
 
+#macro $( CHECK_NULL($val:expr) )$ => stmt:
+       $( if (is_null($val)) {
+              print("Is null, terminating");
+              exit(0);
+          } )$
+#endmacro
 
-class Test {
-    attr num: int;
 
-    new(num: int) {
-        self.num = num;
+#macro $( for ($init:stmt $cond:expr; $each:expr) $body:stmt )$ => stmt:
+       $( {
+              $init
+              while ($cond) {
+                  $body
+                  $each;
+              }
+          } )$
+#endmacro
+
+
+
+class Array<T> {
+    attr _arr: _Array;
+    attr size: int;
+
+    new(size: int) {
+        self._arr = new _Array(size);
+        self.size = size;
     }
-}
 
+    method get_item(index: int) -> T {
+        var obj: Object = self._arr.get_item(index);
+        CHECK_NULL(obj)
+        return obj as T;
+    }
 
-class Test2 (Test) {
-    attr thing: int;
-
-    new(num: int, thing: int) {
-        self.num = num;
-        self.thing = thing;
+    method set_item(index: int, val: T) -> void {
+        self._arr.set_item(index, val);
     }
 }
 
 
 
 def main() -> int {
-    var test2: Test2 = new Test2(3, 7);
-    var test: Test = test2;
+    var arr: Array<Integer> = new Array<Integer>(10);
 
-    print(test2.num);
-    print(test.num);
-    print(test2.thing);
-    print((test as Test2).thing);
+    for (var i: int = 0; i < arr.size; i=i+1) {
+        arr.set_item(i, i * 2);
+    }
+
+    for (var i: int = 0; i < arr.size; i=i+1) {
+        print(arr.get_item(i));
+    }
+
+    print("this is working");
     return 0;
 }

@@ -20,8 +20,14 @@ class Compiler(Visitor):
         dragon_h = str(c_files / "dragon.h")
         list_h = str(c_files / "list.h")
 
-        top_levels = [cgen.Include("stdio.h"), cgen.Include("stdlib.h"), cgen.Include("stdbool.h"),
-                      cgen.Include(dragon_h, angled=False), cgen.Include(list_h, angled=False)]
+        top_levels = [
+            # cgen.Include("stdio.h"),
+            # cgen.Include("stdlib.h"),
+            # cgen.Include("stdbool.h"),
+
+            cgen.Include(dragon_h, angled=False),
+            cgen.Include(list_h, angled=False)
+        ]
 
         for top_level in node.top_level:
             top_levels += self.visit(top_level)
