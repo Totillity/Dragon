@@ -45,6 +45,12 @@ class Compiler(Visitor):
             return cgen.Constant(None)
             # raise Exception(type)
 
+    def visit_GenericClass(self, node: ast.GenericClass):
+        clses = []
+        for implement in node.implements:
+            clses += self.visit_Class(implement)
+        return clses
+
     def visit_Class(self, node: ast.Class):
         cls_type: cgen.ClassType = node.meta["type"]
         has_constructor = node.meta["has_constructor"]

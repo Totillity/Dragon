@@ -3,12 +3,12 @@
 #include "list.h"
 
 
-struct Array;
+struct _Array;
 
 
-struct Array* new_array(int size) {
+struct _Array* new__array(int size) {
     void* mem = calloc(size, sizeof(struct Object*));
-    struct Array* arr = malloc(sizeof(struct Array));
+    struct _Array* arr = malloc(sizeof(struct _Array));
     arr->self = arr;
     arr->up = arr;
     arr->length = size;
@@ -17,6 +17,6 @@ struct Array* new_array(int size) {
 }
 
 
-struct Object* array_get_item(struct Array* array, int index) {
+struct Object* _array_get_item(struct _Array* array, int index) {
     return &array->items[index];
 }

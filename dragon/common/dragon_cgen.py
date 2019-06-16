@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from ._cgen import *
 
 
@@ -124,12 +126,19 @@ class ClassType(DataType):
         return fields
 
 
+class GenericClassType(DataType):
+    def __init__(self, name: str, type_vars: List[str], node):
+        self.name = name
+        self.type_vars = type_vars
+        self.node = node
+
+        self.generics: Dict[Tuple[str, ...], ClassType] = {}
+
+
 Object = ClassType("Object", [])
 
-String = ClassType("String", [Object])
-
-
 Integer = ClassType("Integer", [Object])
+String = ClassType("String", [Object])
 
 
 Object.methods = {"to_string": PointerType(FunctionType([Object], String))}

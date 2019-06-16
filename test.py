@@ -4,5 +4,4 @@ from dragon.common import DragonError
 
 DragonError.debug = True
 
-
-run_file(Path("test.drgn"), delete_c=False)
+run_file(Path("test.drgn"), delete_c=True)

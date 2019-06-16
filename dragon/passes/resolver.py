@@ -82,6 +82,43 @@ class Resolver(Visitor):
         node.meta["type"] = type
         return type
 
+    def visit_Generic(self, node: ast.Generic):
+        type: cgen.GenericClassType = self.visit(node.type)
+        args: List[cgen.ClassType] = [self.visit(arg) for arg in node.args]
+
+        if not isinstance(type, cgen.GenericClassType):
+            raise ResolvingError(f"Generic type must be a generic class", node.type.line, node.type.pos)
+
+        # TODO: check type of args
+
+        arg_names = tuple(arg.name for arg in args)
+        try:
+            generic = type.generics[arg_names]
+            return generic
+        except KeyError:
+            gen_cls_node: ast.GenericClass = type.node
+            cls_name = self.names.next(gen_cls_node.name + '__' + '_'.join(arg_names))
+            cls_node = ast.Class(cls_name, gen_cls_node.bases, gen_cls_node.body)
+            cls_node.place(gen_cls_node.line, gen_cls_node.pos)
+
+            self.names.new_scope()
+            for name, arg in zip(type.type_vars, args):
+                self.names.new_type(name, arg)
+
+            bases = [self.visit(base) for base in cls_node.bases]
+            c_name = cls_name
+            cls_type = cgen.ClassType(c_name, bases)
+            cls_node.meta["type"] = cls_type
+            cls_node.meta["c_name"] = c_name
+
+            self.visit_Class(cls_node)
+            self.names.end_scope()
+
+            gen_cls_node.implements.append(cls_node)
+            type.generics[arg_names] = cls_type
+
+            return cls_type
+
     def visit_Program(self, node: ast.Program):
         self.names.new_scope()
 
@@ -89,9 +126,10 @@ class Resolver(Visitor):
         self.names.new_type("str", cgen.StringType())
         self.names.new_type("void", cgen.VoidType())
         self.names.new_type("Object", cgen.Object)
+        self.names.new_type("Integer", cgen.Integer)
 
-        self.names.new_var("print_int", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
-        self.names.new_var("print_str", cgen.PointerType(cgen.FunctionType([cgen.StringType()], cgen.VoidType())), builtin=True)
+        # self.names.new_var("print_int", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
+        # self.names.new_var("print_str", cgen.PointerType(cgen.FunctionType([cgen.StringType()], cgen.VoidType())), builtin=True)
         self.names.new_var("print", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.VoidType())), builtin=True)
         self.names.new_var("clock", cgen.PointerType(cgen.FunctionType([], cgen.IntType())), builtin=True,
                            c_name='dragon_clock')
@@ -109,6 +147,12 @@ class Resolver(Visitor):
                                           in zip(top_level.args.keys(), cast(cgen.FunctionType, type.pointee).args)}
                 # noinspection PyUnresolvedReferences
                 top_level.meta["ret"] = type.pointee.ret
+            elif isinstance(top_level, ast.GenericClass):
+                c_name = self.names.next(top_level.name)
+                type = cgen.GenericClassType(c_name, top_level.type_vars, top_level)
+                self.names.new_type(top_level.name, type)
+                top_level.meta["type"] = type
+                top_level.meta["c_name"] = c_name
             elif isinstance(top_level, ast.Class):
                 bases = [self.visit(base) for base in top_level.bases]
                 c_name = self.names.next(top_level.name)
@@ -121,6 +165,9 @@ class Resolver(Visitor):
 
         for top_level in node.top_level:
             self.visit(top_level)
+
+    def visit_GenericClass(self, node: ast.GenericClass):
+        pass
 
     def visit_Class(self, node: ast.Class):
         cls_type: cgen.ClassType = node.meta["type"]

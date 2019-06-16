@@ -224,6 +224,13 @@ class Parser:
         stream, _ = stream.expect("class")
         stream, name_token = stream.expect("ident")
         name = name_token.text
+
+        if stream.curr.type == "<":
+            stream, type_vars = self.arguments("<", stream, self.parse_name, ">")
+            type_vars = [type_var.name for type_var in type_vars]
+        else:
+            type_vars = []
+
         if stream.curr.type == "(":
             stream, bases = self.arguments("(", stream, self.parse_type, ")")
         else:
@@ -244,7 +251,11 @@ class Parser:
             else:
                 raise stream.error(f"Class body must contain only attrs, methods, and constructors")
         stream, _ = stream.expect("}")
-        return stream, Class(name, bases, body)
+        if type_vars:
+            # noinspection PyArgumentList
+            return stream, GenericClass(name, bases, body, type_vars)
+        else:
+            return stream, Class(name, bases, body)
 
     @parsing_method
     def parse_attr(self, stream: Stream) -> (Stream, Attr):

@@ -6,15 +6,15 @@
 // {"class":
 
 
-struct Array {
+struct _Array {
     void* self;
     void* up;
     int length;
     struct Object* items;
 };
 
-struct Array* new_array(int);
+struct _Array* new__array(int);
 
-struct Object* array_get_item(struct Array*, int);
+struct Object* _array_get_item(struct _Array*, int);
 
 #endif

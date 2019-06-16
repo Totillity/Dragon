@@ -13,7 +13,7 @@ __all__ = ['Node',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
-           'TopLevel', 'Function', 'Class',
+           'TopLevel', 'Function', 'Class', 'GenericClass',
 
            'Program', ]
 
@@ -206,6 +206,13 @@ class Class(TopLevel):
     name: str
     bases: List[Type]
     body: List[ClassStmt]
+
+
+@dataclass()
+class GenericClass(Class):
+    type_vars: List[str]
+
+    implements: List[Class] = field(default_factory=list)
 
 
 @dataclass()

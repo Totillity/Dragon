@@ -1,46 +1,18 @@
 
-#macro $( for($init:stmt $cond:expr; $each:expr) $body:stmt )$ => stmt:
-       $( {
-              $init
-              while ($cond) {
-                  $body
-                  $each;
-              }
-          } )$
-#endmacro
 
-#macro $( DOUBLE($val:expr) )$ => expr: $( $val + 2 )$ #endmacro
-
-
-#macro $( SAY_HI )$ => expr: $( print("hi") )$ #endmacro
-
-
-
-def fibo(n: int) -> int {
-    if (n < 2)
-        return n;
-    else
-        return fibo(n-1) + fibo(n-2);
-}
-
-
-class Dude {
+class Holder<T> {
+    attr contents: T;
 }
 
 
 def main() -> int {
-    # var start: int = clock();
-    # print(fibo(35));
-    # var end: int = clock();
+    var holder: Holder<Integer> = new Holder<Integer>();
+    holder.contents = 3;
+    var holder_holder: Holder<Holder<Integer>> = new Holder<Holder<Integer>>();
+    holder_holder.contents = holder;
 
-    # print(end - start);
-
-    for (var i: int = 0; i < 10; i = i + 1) {
-        print(i);
-    }
-
-    print(DOUBLE(3) * 4);
-    SAY_HI;
+    print(holder.contents);
+    print(holder_holder.contents.contents);
 
     return 0;
 }
