@@ -2,10 +2,6 @@
 #define LIST_H
 
 
-// DRAGON: {"class":
-// {"class":
-
-
 struct _Array {
     struct BaseObject meta;
 

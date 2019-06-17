@@ -158,13 +158,7 @@ def scan(text: str) -> List[Token]:
                 start = state.line_pos
                 match = re.match(r"\$[_a-zA-Z][_a-zA-Z0-9]*", text[state.pos:]).group()
                 advance(len(match))
-                if next_is(":"):
-                    expect(":")
-                    type = re.match(r"[_a-zA-Z][_a-zA-Z0-9]*", text[state.pos:]).group()
-                    advance(len(type))
-                    tokens.append(Token("$ident", match + " " + type, state.line, (start, state.line_pos)))
-                else:
-                    tokens.append(Token("$ident", match, state.line, (start, state.line_pos)))
+                tokens.append(Token("$ident", match, state.line, (start, state.line_pos)))
             else:
                 raise ScanningError(f"Cannot scan tokens from {text[state.pos]}", state.line,
                                     (state.line_pos, state.line_pos + 1))

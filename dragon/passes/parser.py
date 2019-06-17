@@ -64,23 +64,36 @@ class Macro:
         # stream, start = stream.expect("ident")
         # assert start.text == self.start
 
+        def get_else(li, ind, default=None):
+            try:
+                return li[ind]
+            except IndexError:
+                return default
+
         symbols = {"stmt": {}, "expr": {}}
 
-        for call_token in self.call:
+        call_iter = enumerate(iter(self.call))
+        for n, call_token in call_iter:
             if not call_token.type.startswith("$"):
                 after_stream, token = stream.advance()
                 if not token == call_token:
-                    raise stream.error(f"Macro expected {token}, got {call_token}")
+                    raise stream.error(f"Macro expected {call_token}, got {token}")
                 stream = after_stream
             else:
                 type = call_token.type[1:]
                 if type == "ident":
-                    if not len(call_token.text.split(" ")) == 2:
+                    if (get_else(self.call, n + 1) and get_else(self.call, n + 2)
+                            and self.call[n + 1].type == ":" and self.call[n + 2].type == "ident"):
+                        rule = self.call[n + 2].text
+                        ident = call_token.text
+                        # ident, rule = call_token.text.split(" ")
+                        stream, node = getattr(parser, "parse_" + rule)(stream)
+                        symbols[rule][ident] = node
+                        next(call_iter)
+                        next(call_iter)
+                    else:
                         raise ParseError(f"Macro argument must be of form $identifier:type, not {call_token.text!r}",
                                          call_token.line, call_token.pos)
-                    ident, rule = call_token.text.split(" ")
-                    stream, node = getattr(parser, "parse_" + rule)(stream)
-                    symbols[rule][ident] = node
                 else:
                     raise Exception()
 

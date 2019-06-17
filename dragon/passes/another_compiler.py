@@ -11,6 +11,8 @@ class CompilingError(DragonError):
 
 
 class Compiler(Visitor):
+    # TODO: support reference counting
+    # TODO: and also weak refs
     def __init__(self):
         self.main_func = ''
 
@@ -280,12 +282,8 @@ class Compiler(Visitor):
                 raise Exception()
             path = to_type.path_to_parent(from_type)[1:]
 
-            # obj = cgen.Deref(obj)
-
             for base in path:
                 obj = cgen.Cast(cgen.GetAttr(cgen.GetArrow(obj, "meta"), 'up'), base)
-
-            # obj = cgen.Ref(obj)
 
             return obj
 
