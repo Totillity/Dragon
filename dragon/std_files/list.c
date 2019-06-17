@@ -10,8 +10,8 @@ struct _Array;
 struct _Array* new__Array(int size) {
     void* mem = calloc(size, sizeof(struct Object**));
     struct _Array* arr = malloc(sizeof(struct _Array));
-    arr->self = arr;
-    arr->up = arr;
+    arr->meta.self = arr;
+    arr->meta.up = arr;
 
     arr->length = size;
     arr->items = mem;

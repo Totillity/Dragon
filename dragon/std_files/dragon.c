@@ -12,7 +12,7 @@ struct String;
 struct Integer;
 
 bool is_null(struct Object* obj) {
-    return obj->self == NULL;
+    return obj->meta.self == NULL;
 }
 
 
@@ -29,8 +29,8 @@ struct String* Object_to_string(void* _self) {
 
 
 void new_parent_Object(struct Object* parent_ptr, void* child_ptr, void* self_ptr) {
-    parent_ptr->self = self_ptr;
-    parent_ptr->up = child_ptr;
+    parent_ptr->meta.self = self_ptr;
+    parent_ptr->meta.up = child_ptr;
 }
 
 
@@ -40,8 +40,8 @@ struct String* _new_String(char* chars) {
     (*obj).str = chars;
     (*obj).len = strlen(chars);
 
-    obj->self = obj;
-    obj->up = obj;
+    obj->meta.self = obj;
+    obj->meta.up = obj;
 
     new_parent_Object((&obj->parent_Object), obj, obj);
 
@@ -64,8 +64,8 @@ struct String* String_to_string(void* _self) {
 
 
 void new_parent_Integer(struct Integer* parent_ptr, void* child_ptr, void* self_ptr) {
-    parent_ptr->self = self_ptr;
-    parent_ptr->up = child_ptr;
+    parent_ptr->meta.self = self_ptr;
+    parent_ptr->meta.up = child_ptr;
 }
 
 
@@ -73,8 +73,8 @@ struct Integer* _new_Integer(int num) {
     struct Integer* obj = malloc(sizeof(struct Integer));
     obj->num = num;
 
-    obj->self = obj;
-    obj->up = obj;
+    obj->meta.self = obj;
+    obj->meta.up = obj;
 
     new_parent_Object((&obj->parent_Object), obj, obj);
 
@@ -102,7 +102,7 @@ struct String* Integer_to_string(void* _self) {
 
 
 void print(struct Object* _obj) {
-    struct String* str = _obj->to_string(_obj->self);
+    struct String* str = _obj->to_string(_obj->meta.self);
 
     // puts(str->str);
     printf("%s\n", str->str);

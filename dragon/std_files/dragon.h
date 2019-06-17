@@ -7,20 +7,19 @@
 struct BaseObject {
     void* self;
     void* up;
+    int ref_count;
 };
 
 
 struct Object {
-    void* self;
-    void* up;
+    struct BaseObject meta;
 
     struct String* (*to_string)(void*);
 };
 
 
 struct String {
-    void* self;
-    void* up;
+    struct BaseObject meta;
 
     struct Object parent_Object;
 
@@ -30,8 +29,7 @@ struct String {
 
 
 struct Integer {
-    void* self;
-    void* up;
+    struct BaseObject meta;
 
     struct Object parent_Object;
 
@@ -57,8 +55,6 @@ struct String* Integer_to_string(void*);
 
 
 void print(struct Object*);
-void print_str(char*);
-void print_int(int);
 
 int dragon_clock();
 

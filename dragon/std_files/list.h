@@ -7,8 +7,7 @@
 
 
 struct _Array {
-    void* self;
-    void* up;
+    struct BaseObject meta;
 
     struct Object parent_Object;
 

@@ -62,8 +62,7 @@ class Compiler(Visitor):
         has_constructor = node.meta["has_constructor"]
 
         cls_struct = cgen.Struct(node.meta["c_name"], {
-            'self': cgen.VoidPointerType(),
-            'up': cgen.VoidPointerType(),
+            'meta': cgen.StructType("BaseObject"),
 
             **{'parent_'+base.name: base.struct for base in cls_type.bases},
 
@@ -75,8 +74,8 @@ class Compiler(Visitor):
 
         new_empty = cgen.Function("new_empty_"+node.meta["c_name"], {}, cls_type, [
             cgen.Declare(cls_type, "obj", cgen.Call(cgen.GetVar("malloc"), [cgen.SizeOf(cls_struct.struct_type)])),
-            cgen.ExprStmt(cgen.SetArrow(cgen.GetVar("obj"), "self", cgen.GetVar("obj"))),
-            cgen.ExprStmt(cgen.SetArrow(cgen.GetVar("obj"), "up", cgen.GetVar("obj"))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "self", cgen.GetVar("obj"))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "up", cgen.GetVar("obj"))),
 
             *(
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("new_parent_"+base.name), [cgen.Ref(cgen.GetArrow(cgen.GetVar("obj"), 'parent_'+base.name)), cgen.GetVar('obj'), cgen.GetVar('obj')]))
@@ -128,8 +127,12 @@ class Compiler(Visitor):
         new_parent = cgen.Function("new_parent_"+node.meta["c_name"],
                                    {'parent_ptr': cls_type, 'child_ptr': cgen.VoidPointerType(), 'self_ptr': cgen.VoidPointerType()},
                                    cgen.VoidType(), [
-            cgen.ExprStmt(cgen.SetArrow(cgen.GetVar("parent_ptr"), 'self', cgen.GetVar('self_ptr'))),
-            cgen.ExprStmt(cgen.SetArrow(cgen.GetVar("parent_ptr"), 'up', cgen.GetVar("child_ptr"))),
+                                       cgen.ExprStmt(
+                                           cgen.SetAttr(cgen.GetArrow(cgen.GetVar("parent_ptr"), "meta"), 'self',
+                                                        cgen.GetVar('self_ptr'))),
+                                       cgen.ExprStmt(
+                                           cgen.SetAttr(cgen.GetArrow(cgen.GetVar("parent_ptr"), "meta"), 'up',
+                                                        cgen.GetVar("child_ptr"))),
             *(
                 cgen.ExprStmt(cgen.Call(
                     cgen.Ref(cgen.GetVar("new_parent_"+base.name)),
@@ -234,7 +237,7 @@ class Compiler(Visitor):
         args = []
         if isinstance(node.callee, ast.GetAttr):
             obj = node.callee.obj
-            args.append(cgen.GetArrow(self.visit(obj), 'self'))
+            args.append(cgen.GetAttr(cgen.GetArrow(self.visit(obj), 'meta'), 'self'))
             expected_args = node.meta["func"].pointee.args[1:]
         else:
             expected_args = node.meta["func"].pointee.args
@@ -280,7 +283,7 @@ class Compiler(Visitor):
             # obj = cgen.Deref(obj)
 
             for base in path:
-                obj = cgen.Cast(cgen.GetArrow(obj, 'up'), base)
+                obj = cgen.Cast(cgen.GetAttr(cgen.GetArrow(obj, "meta"), 'up'), base)
 
             # obj = cgen.Ref(obj)
 
