@@ -10,7 +10,7 @@ Email: totillity@gmail.com
 
 ### How to use
 
-IMPORTANT: **YOU NEED CLANG** (the compiler, which you can get ![here](http://releases.llvm.org/download.html#8.0.0)), 
+IMPORTANT: **YOU NEED CLANG** (the compiler, which you can get [here](http://releases.llvm.org/download.html#8.0.0)), 
 or you can specify the compiler through setting the 
 approriate command line flag (see \_\_main__.py) or through passing `compiler='gcc'` or whatever your compiler is in the 
 run.py functions.
