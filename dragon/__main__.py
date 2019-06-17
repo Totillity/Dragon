@@ -1,6 +1,6 @@
 import pathlib
 
-from dragon.run import run_file
+from dragon.run import run_file, compile_file
 import argparse
 
 
@@ -15,7 +15,10 @@ def main():
 
     place = pathlib.Path(args.file)
 
-    run_file(place)
+    if args.run:
+        run_file(place, delete_c=not args.show_c, compiler=args.compiler)
+    else:
+        compile_file(place, delete_c=not args.show_c, compiler=args.compiler)
 
 
 if __name__ == "__main__":

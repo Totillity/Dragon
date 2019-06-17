@@ -1,6 +1,6 @@
 import os
 import pathlib
-from typing import Dict, Type
+from typing import Dict, Type, List
 
 from dragon.common import ast, DragonError, cgen, Visitor
 from dragon.passes.resolver import Resolver
@@ -15,8 +15,9 @@ class Compiler(Visitor):
     # TODO: and also weak refs
     def __init__(self):
         self.main_func = ''
+        self.programs: List[cgen.Program] = []
 
-    def visit_Program(self, node: ast.Program):
+    def visit_Program(self, node: ast.Program, path: pathlib.Path, is_main=False):
         c_files = pathlib.Path(os.path.realpath(__file__)).parent.parent / "std_files"
 
         dragon_h = str(c_files / "dragon.h")
@@ -32,16 +33,18 @@ class Compiler(Visitor):
         ]
 
         for top_level in node.top_level:
-            top_levels += self.visit(top_level)
+            top_levels += self.visit(top_level, is_main)
 
-        if not self.main_func:
-            raise CompilingError("No main function", -1, (0, 0))
+        if is_main:
+            if self.main_func == '':
+                raise CompilingError("No main function", -1, (0, 0))
 
-        top_levels.append(cgen.Function("main", {}, cgen.IntType(), [
-            cgen.Return(cgen.Call(cgen.GetVar(self.main_func), []))
-        ]))
+            top_levels.append(cgen.Function("main", {}, cgen.IntType(), [
+                cgen.Return(cgen.Call(cgen.GetVar(self.main_func), []))
+            ]))
 
-        program = cgen.Program(top_levels)
+        program = cgen.Program(top_levels, path)
+        self.programs.append(program)
         return program
 
     def default_of(self, type: cgen.Type):
@@ -53,13 +56,19 @@ class Compiler(Visitor):
             return cgen.Constant(None)
             # raise Exception(type)
 
-    def visit_GenericClass(self, node: ast.GenericClass):
+    def visit_Import(self, node: ast.Import, is_main=False):
+        program: ast.Program = node.meta["program"]
+        self.visit_Program(program, node.meta["path"])
+        path: pathlib.Path = node.meta["path"]
+        return [cgen.Include(str(path.with_suffix('.h')), angled=False)]
+
+    def visit_GenericClass(self, node: ast.GenericClass, is_main=False):
         clses = []
         for implement in node.implements:
             clses += self.visit_Class(implement)
         return clses
 
-    def visit_Class(self, node: ast.Class):
+    def visit_Class(self, node: ast.Class, is_main=False):
         cls_type: cgen.ClassType = node.meta["type"]
         has_constructor = node.meta["has_constructor"]
 
@@ -178,8 +187,8 @@ class Compiler(Visitor):
         body.append(cgen.Return(cgen.GetVar("self")))
         return [cgen.Function(node.meta["c_name"], node.meta["args"], node.meta["cls"], body)]
 
-    def visit_Function(self, node: ast.Function):
-        if node.meta["is main"]:
+    def visit_Function(self, node: ast.Function, is_main=None):
+        if node.meta["is main"] and is_main:
             self.main_func = node.meta["c_name"]
 
         body = []
@@ -294,9 +303,10 @@ class Compiler(Visitor):
         return self.visit(node.expr)
 
 
-def compile_drgn(tree):
+def compile_drgn(tree, path: pathlib.Path) -> cgen.Unit:
     resolver = Resolver()
     resolver.visit_Program(tree)
     compiler = Compiler()
-    program: cgen.Program = compiler.visit(tree)
-    return program
+    compiler.visit_Program(tree, path, is_main=True)
+    unit = cgen.Unit(compiler.programs)
+    return unit

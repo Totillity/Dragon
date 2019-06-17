@@ -1,0 +1,8 @@
+#import "arrays.drgn"
+
+def main() -> int {
+    var arr: arrays.Array<Integer> = new arrays.Array<Integer>(10);
+    arr.set_item(1, 1);
+    print(arr.get_item(1));
+    return 0;
+}

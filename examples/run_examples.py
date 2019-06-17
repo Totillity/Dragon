@@ -10,7 +10,8 @@ programs = [
     'hello_world',
     'fibonacci',
     'macros',
-    'arrays'
+    'arrays',
+    'imports',
 ]
 
 for program in programs:

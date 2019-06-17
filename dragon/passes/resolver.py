@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import itertools
+import pathlib
 from dataclasses import dataclass
-from typing import List, Dict, cast
+from typing import List, Dict, cast, Tuple
 
 from dragon.common import cgen, ast, DragonError, Visitor
+from . import parser, scanner
 
 
 class ResolvingError(DragonError):
@@ -17,55 +19,137 @@ class VarMeta:
     type: cgen.Type
 
 
-class Environment:
-    def __init__(self):
-        self.vars: List[Dict[str, VarMeta]] = []
-        self.types: List[Dict[str, cgen.Type]] = []
+class Module:
+    def __init__(self, env: Environment):
+        # only copy the globals, not the builtins such as Integer
+        # so only the first layer of vars and types
+        self.vars = env.vars.copy()
+        self.types = env.types.copy()
+        # TODO: Copy modules too?
 
-        self.count = itertools.count()
+
+# class Environment:
+#     def __init__(self):
+#         self.vars: List[Dict[str, VarMeta]] = []
+#         self.types: List[Dict[str, cgen.Type]] = []
+#
+#         self.count = itertools.count()
+#
+#     def next(self, name: str):
+#         return name + "_" + str(next(self.count))
+#
+#     def new_scope(self, names: Dict[str, cgen.Type] = None):
+#         if names is None:
+#             names = {}
+#         else:
+#             names = {name: VarMeta(self.next(name), type) for name, type in names.items()}
+#
+#         self.vars.append(names)
+#         self.types.append({})
+#
+#     def end_scope(self):
+#         self.types.pop()
+#         return self.vars.pop()
+#
+#     def new_var(self, var: str, type: cgen.Type, builtin=False, c_name=None) -> str:
+#         if builtin:
+#             if c_name is None:
+#                 c_name = var
+#         else:
+#             c_name = self.next(var)
+#         self.vars[-1][var] = VarMeta(c_name, type)
+#         return c_name
+#
+#     def extend_vars(self, vars: Dict[str, cgen.Type], builtin=False):
+#         return [self.new_var(var, type, builtin) for var, type in vars.items()]
+#
+#     def get_var(self, var: str) -> VarMeta:
+#         for scope in self.vars:
+#             if var in scope:
+#                 return scope[var]
+#         raise KeyError(var)
+#
+#     def new_type(self, name: str, type: cgen.Type):
+#         self.types[-1][name] = type
+#
+#     def get_type(self, name: str) -> cgen.Type:
+#         for scope in self.types:
+#             if name in scope:
+#                 return scope[name]
+#         raise KeyError(name)
+
+
+class Environment:
+    def __init__(self, vars: Dict[str, cgen.Type], types: Dict[str, cgen.Type], name: str = None,
+                 parent: 'Environment' = None):
+        self.vars: Dict[str, VarMeta] = {var: VarMeta(var, typ) for var, typ in vars.items()}
+        self.types: Dict[str, cgen.Type] = types
+        self.modules: Dict[str, Module] = {}
+
+        self.parent = parent
+        if parent is None:
+            self.count = itertools.count()
+        else:
+            self.count = parent.count
+
+        if name is None:
+            self.name = self.next("scope")
+        else:
+            self.name = name
 
     def next(self, name: str):
         return name + "_" + str(next(self.count))
 
-    def new_scope(self, names: Dict[str, cgen.Type] = None):
-        if names is None:
-            names = {}
-        else:
-            names = {name: VarMeta(self.next(name), type) for name, type in names.items()}
-
-        self.vars.append(names)
-        self.types.append({})
-
-    def end_scope(self):
-        self.types.pop()
-        return self.vars.pop()
-
-    def new_var(self, var: str, type: cgen.Type, builtin=False, c_name=None) -> str:
+    def new_var(self, name: str, type: cgen.Type, builtin=False, c_name=''):
         if builtin:
-            if c_name is None:
-                c_name = var
+            if c_name:
+                self.vars[name] = VarMeta(c_name, type)
+            else:
+                self.vars[name] = VarMeta(name, type)
         else:
-            c_name = self.next(var)
-        self.vars[-1][var] = VarMeta(c_name, type)
-        return c_name
+            self.vars[name] = VarMeta(self.next(name), type)
+        return self.vars[name].c_name
 
-    def extend_vars(self, vars: Dict[str, cgen.Type], builtin=False):
-        return [self.new_var(var, type, builtin) for var, type in vars.items()]
-
-    def get_var(self, var: str) -> VarMeta:
-        for scope in self.vars:
-            if var in scope:
-                return scope[var]
-        raise KeyError(var)
+    def extend_vars(self, names: Dict[str, cgen.Type], builtin=False, c_names=None):
+        if c_names is None:
+            c_names = itertools.repeat(None)
+        else:
+            if len(c_names) != len(names):
+                raise Exception()
+        return [self.new_var(name, type, builtin, c_name) for (name, type), c_name in zip(names.items(), c_names)]
 
     def new_type(self, name: str, type: cgen.Type):
-        self.types[-1][name] = type
+        self.types[name] = type
+
+    def new_scope(self, name: str = None) -> Tuple[Environment, Environment]:
+        return self, Environment({}, {}, name, parent=self)
+
+    def get_var(self, name: str) -> VarMeta:
+        if name in self.vars:
+            return self.vars[name]
+        else:
+            if self.parent:
+                return self.parent.get_var(name)
+            else:
+                raise KeyError(name)
 
     def get_type(self, name: str) -> cgen.Type:
-        for scope in self.types:
-            if name in scope:
-                return scope[name]
-        raise KeyError(name)
+        if name in self.types:
+            return self.types[name]
+        else:
+            if self.parent:
+                return self.parent.get_type(name)
+            else:
+                raise KeyError(name)
+
+    def get_module(self, name: str) -> Module:
+        if name in self.modules:
+            return self.modules[name]
+        else:
+            if self.parent:
+                return self.parent.get_module(name)
+            else:
+                raise KeyError(name)
 
 
 def inherited_methods(cls_type: cgen.ClassType):
@@ -75,12 +159,35 @@ def inherited_methods(cls_type: cgen.ClassType):
 
 class Resolver(Visitor):
     def __init__(self):
-        self.names = Environment()
+        self.names: Environment = Environment(
+            {
+                "print": cgen.dragon_function([cgen.Object], cgen.VoidType()),
+                "exit": cgen.dragon_function([cgen.IntType()], cgen.VoidType()),
+                "is_null": cgen.dragon_function([cgen.Object], cgen.BoolType()),
+            },
+            {
+                "int": cgen.IntType(),
+                "str": cgen.StringType(),
+                "void": cgen.VoidType(),
+                "Object": cgen.Object,
+                "Integer": cgen.Integer,
+                "String": cgen.String,
+                "_Array": cgen.C_Array,
+            }
+        )
+
+        self.names.new_var("clock", cgen.dragon_function([], cgen.IntType()), builtin=True, c_name='dragon_clock')
+        self.names.new_var("null", cgen.NullType(), builtin=True, c_name='NULL')
+
+        self.MODULE_MODE = False
 
     def visit_Name(self, node: ast.Name):
-        type = self.names.get_type(node.name)
-        node.meta["type"] = type
-        return type
+        if self.MODULE_MODE:
+            return self.names.get_module(node.name)
+        else:
+            type = self.names.get_type(node.name)
+            node.meta["type"] = type
+            return type
 
     def visit_Generic(self, node: ast.Generic):
         type: cgen.GenericClassType = self.visit(node.type)
@@ -101,7 +208,10 @@ class Resolver(Visitor):
             cls_node = ast.Class(cls_name, gen_cls_node.bases, gen_cls_node.body)
             cls_node.place(gen_cls_node.line, gen_cls_node.pos)
 
-            self.names.new_scope()
+            old_scope = self.names
+            _, cls_scope = type.scope.new_scope()
+            self.names: Environment = cls_scope
+
             for name, arg in zip(type.type_vars, args):
                 self.names.new_type(name, arg)
 
@@ -112,30 +222,26 @@ class Resolver(Visitor):
             cls_node.meta["c_name"] = c_name
 
             self.visit_Class(cls_node)
-            self.names.end_scope()
+
+            self.names: Environment = old_scope
 
             gen_cls_node.implements.append(cls_node)
             type.generics[arg_names] = cls_type
 
             return cls_type
 
+    def visit_GetName(self, node: ast.GetName):
+        if self.MODULE_MODE:
+            pass
+        else:
+            self.MODULE_MODE = True
+            module: Module = self.visit(node.type)
+            self.MODULE_MODE = False
+            return module.types[node.name]
+
     def visit_Program(self, node: ast.Program):
-        self.names.new_scope()
-
-        self.names.new_type("int", cgen.IntType())
-        self.names.new_type("str", cgen.StringType())
-        self.names.new_type("void", cgen.VoidType())
-        self.names.new_type("Object", cgen.Object)
-        self.names.new_type("Integer", cgen.Integer)
-        self.names.new_type("String", cgen.String)
-        self.names.new_type("_Array", cgen.C_Array)
-
-        self.names.new_var("print", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.VoidType())), builtin=True)
-        self.names.new_var("clock", cgen.PointerType(cgen.FunctionType([], cgen.IntType())), builtin=True,
-                           c_name='dragon_clock')
-        self.names.new_var("exit", cgen.PointerType(cgen.FunctionType([cgen.IntType()], cgen.VoidType())), builtin=True)
-        self.names.new_var("is_null", cgen.PointerType(cgen.FunctionType([cgen.Object], cgen.BoolType())), builtin=True)
-        self.names.new_var("null", cgen.NullType(), builtin=True, c_name='NULL')
+        modules_wide, new_scope = self.names.new_scope("globals")
+        self.names: Environment = new_scope
 
         for top_level in node.top_level:
             if isinstance(top_level, ast.Function):
@@ -152,7 +258,7 @@ class Resolver(Visitor):
                 top_level.meta["ret"] = type.pointee.ret
             elif isinstance(top_level, ast.GenericClass):
                 c_name = self.names.next(top_level.name)
-                type = cgen.GenericClassType(c_name, top_level.type_vars, top_level)
+                type = cgen.GenericClassType(c_name, top_level.type_vars, top_level, self.names)
                 self.names.new_type(top_level.name, type)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
@@ -163,11 +269,34 @@ class Resolver(Visitor):
                 self.names.new_type(top_level.name, type)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
+            elif isinstance(top_level, ast.Import):
+                this_scope = self.names
+                self.names: Environment = modules_wide
+
+                file_path = pathlib.Path(top_level.file)
+                with open(file_path, "r") as file_obj:
+                    file = file_obj.read()
+                parsed = parser.parse(scanner.scan(file))
+                module_scope = self.visit_Program(parsed)
+
+                self.names: Environment = this_scope
+                module = Module(module_scope)
+                self.names.modules[file_path.with_suffix('').name] = module
+                top_level.meta["module"] = module
+                top_level.meta["path"] = file_path
+                top_level.meta["program"] = parsed
             else:
                 raise Exception(top_level)
 
         for top_level in node.top_level:
             self.visit(top_level)
+
+        curr_scope = self.names
+        self.names = modules_wide
+        return curr_scope
+
+    def visit_Import(self, node: ast.Import):
+        pass
 
     def visit_GenericClass(self, node: ast.GenericClass):
         pass
@@ -245,7 +374,10 @@ class Resolver(Visitor):
 
     def visit_Method(self, node: ast.Method):
         type = node.meta["type"]
-        self.names.new_scope()
+
+        old_scope, new_scope = self.names.new_scope()
+        self.names: Environment = new_scope
+
         self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
         self.names.new_var('self', node.meta["cls"], builtin=True)
         c_names = self.names.extend_vars(node.meta["other args"])
@@ -254,7 +386,8 @@ class Resolver(Visitor):
         returns = []
         for stmt in node.body:
             returns.extend(self.visit(stmt))
-        self.names.end_scope()
+
+        self.names: Environment = old_scope
 
         # TODO: Return validation
         # for ret in returns:
@@ -263,7 +396,10 @@ class Resolver(Visitor):
 
     def visit_Constructor(self, node: ast.Constructor):
         type = node.meta["type"]
-        self.names.new_scope()
+
+        old_scope, new_scope = self.names.new_scope()
+        self.names: Environment = new_scope
+
         # self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
         self.names.new_var('self', node.meta["cls"], builtin=True)
         c_names = self.names.extend_vars(node.meta["other args"])
@@ -272,24 +408,28 @@ class Resolver(Visitor):
 
         for stmt in node.body:
             self.visit(stmt)
-        self.names.end_scope()
+
+        self.names: Environment = old_scope
 
     def visit_Function(self, node: ast.Function):
-        if node.name == "main" and len(self.names.vars) == 1:
+        if node.name == "main" and self.names.name == "globals":
             node.meta["is main"] = True
         else:
             node.meta["is main"] = not True
 
         type = node.meta["type"]
         returns = []
-        self.names.new_scope()
+
+        old_scope, new_scope = self.names.new_scope()
+        self.names: Environment = new_scope
 
         c_names = self.names.extend_vars({arg: typ for arg, typ in node.meta["args"].items()})
         node.meta["c args"] = dict(zip(c_names, node.meta["args"].values()))
 
         for stmt in node.body:
             returns.extend(self.visit(stmt))
-        self.names.end_scope()
+
+        self.names: Environment = old_scope
         # TODO: Return validation
 
     def visit_New(self, node: ast.New):

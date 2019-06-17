@@ -1,14 +1,10 @@
 import os
 from pathlib import Path
-import sys
 
 from dragon.passes import compile_drgn, parse, scan
-from dragon.common import DragonError, cgen as ast
+from dragon.common import DragonError
 
-__all__ = ['program_from_str', 'program_from_file',
-           'run_str', 'run_file',
-           'generate_program', 'compile_program',
-           'run_program',
+__all__ = ['run_file', 'compile_file',
            'Path']
 
 
@@ -16,76 +12,74 @@ class CompilingError(DragonError):
     pass
 
 
-def program_from_str(text: str) -> ast.Program:
+def compile_file(path: Path, compiler='clang', delete_c=True):
+    with path.open("r") as file:
+        contents = file.read()
+
     try:
-        program = compile_drgn(parse(scan(text)))
+        unit = compile_drgn(parse(scan(contents)), path)
     except DragonError as e:
-        e.finish('<string>', text)
+        e.finish('<string>', contents)
         raise
-    return program
 
+    for program in unit.programs:
+        with program.path.with_suffix(".h").open("w") as header:
+            with program.path.with_suffix(".c").open("w") as source:
+                base_name = program.path.with_suffix('').name.replace("__", "")
+                program.generate(base_name, header, source)
 
-def program_from_file(file: Path) -> ast.Program:
-    try:
-        with file.open("r") as dragon_file:
-            text = dragon_file.read()
-    except FileNotFoundError:
-        print(f"File {file} does not exist", file=sys.stderr)
-        sys.exit()
-
-    return program_from_str(text)
-
-
-def run_str(text: str, file_name: Path = None, compiler='clang'):
-    program = program_from_str(text)
-
-    if file_name is None:
-        file_name = Path("__run_str__")
-
-    run_program(program, file_name, compiler)
-
-
-def run_file(file: Path, compiler='clang', delete_c=True, delete_exe=True):
-    program = program_from_file(file)
-
-    to_delete = []
-    if delete_c:
-        to_delete += ['.h', '.c']
-    if delete_exe:
-        to_delete += ['']
-
-    run_program(program, file, compiler, to_delete)
-
-
-def generate_program(program: ast.Program, file_name: Path):
-    with file_name.with_suffix(".h").open("w") as header:
-        with file_name.with_suffix(".c").open("w") as source:
-            base_name = file_name.with_suffix('').name.replace("__", "")
-            program.generate(base_name, header, source)
-
-
-def compile_program(program: ast.Program, file_name: Path, compiler='clang'):
-    generate_program(program, file_name)
     c_files = Path(os.path.realpath(__file__)).parent / "std_files"
     dragon_c = str(c_files / "dragon.c")
     list_c = str(c_files / "list.c")
 
-    result = os.system(f"{compiler} -O3 -o {file_name.with_suffix('')} "
-                       f"{file_name.with_suffix('.c')} {dragon_c} {list_c} "
+    result = os.system(f"{compiler} -O3 -o {path.with_suffix('')} "
+                       f"{' '.join(str(program.path.with_suffix('.c')) for program in unit.programs)} "
+                       f"{dragon_c} {list_c} "
                        f"-Wno-parentheses-equality")
 
     if result != 0:
-        CompilingError("Error during compiling generated C code", 0, (0, 0)).finish(str(file_name), "")
+        CompilingError("Error during compiling generated C code", 0, (0, 0)).finish(str(path), "")
+
+    if delete_c:
+        for program in unit.programs:
+            program.path.with_suffix(".c").unlink()
+            program.path.with_suffix(".h").unlink()
 
 
-def run_program(program: ast.Program, file_name: Path, compiler='clang', delete=('', '.h', '.c')):
-    compile_program(program, file_name, compiler)
+def run_file(path: Path, compiler='clang', delete_c=True, delete_exe=True):
+    with path.open("r") as file:
+        contents = file.read()
 
-    os.system(f"./{file_name.with_suffix('')}")
+    try:
+        unit = compile_drgn(parse(scan(contents)), path)
+    except DragonError as e:
+        e.finish('<string>', contents)
+        raise
 
-    delete_files(file_name, delete)
+    for program in unit.programs:
+        with program.path.with_suffix(".h").open("w") as header:
+            with program.path.with_suffix(".c").open("w") as source:
+                base_name = program.path.with_suffix('').name.replace("__", "")
+                program.generate(base_name, header, source)
 
+    c_files = Path(os.path.realpath(__file__)).parent / "std_files"
+    dragon_c = str(c_files / "dragon.c")
+    list_c = str(c_files / "list.c")
 
-def delete_files(file_name: Path, delete=('', '.h', '.c')):
-    for suffix in delete:
-        file_name.with_suffix(suffix).unlink()
+    result = os.system(f"{compiler} -O3 -o {path.with_suffix('')} "
+                       f"{' '.join(str(program.path.with_suffix('.c')) for program in unit.programs)} "
+                       f"{dragon_c} {list_c} "
+                       f"-Wno-parentheses-equality")
+
+    if result != 0:
+        CompilingError("Error during compiling generated C code", 0, (0, 0)).finish(str(path), "")
+
+    os.system(f"./{path.with_suffix('')}")
+
+    if delete_c:
+        for program in unit.programs:
+            program.path.with_suffix(".c").unlink()
+            program.path.with_suffix(".h").unlink()
+
+    if delete_exe:
+        path.with_suffix("").unlink()

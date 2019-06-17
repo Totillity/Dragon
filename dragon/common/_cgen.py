@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pathlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Dict, IO, ClassVar, cast, Iterable
@@ -382,16 +383,16 @@ class Struct(TopLevel):
         return StructType(self.name)
 
     def declaration(self) -> str:
-        return "struct " + self.name + ";\n"
-        # decl = f"struct {self.name} {{" + "\n".join(
-        #     [''] + ["    " + typ.with_name(name)+";" for name, typ in self.fields.items()] + ['']) + "};\n"
-        # return decl
-
-    def definition(self):
+        # return "struct " + self.name + ";\n"
         decl = f"struct {self.name} {{" + "\n".join(
             [''] + ["    " + typ.with_name(name) + ";" for name, typ in self.fields.items()] + ['']) + "};\n"
         return decl
-        # return self.declaration()
+
+    def definition(self):
+        # decl = f"struct {self.name} {{" + "\n".join(
+        #     [''] + ["    " + typ.with_name(name) + ";" for name, typ in self.fields.items()] + ['']) + "};\n"
+        # return decl
+        return "struct " + self.name + ";\n"
 
 
 @dataclass()
@@ -423,8 +424,9 @@ class Function(TopLevel):
 
 
 class Program:
-    def __init__(self, top_levels: List[TopLevel]):
+    def __init__(self, top_levels: List[TopLevel], path: pathlib.Path):
         self.top_levels = top_levels
+        self.path = path
 
     def generate(self, name: str, header: IO, source: IO):
         header.write(f"#ifndef {name.upper()}_H\n")
@@ -438,3 +440,8 @@ class Program:
             source.write(top_level.definition())
             source.write("\n\n")
         header.write(f"#endif  // {name.upper()}_H")
+
+
+class Unit:
+    def __init__(self, programs: List[Program]):
+        self.programs = programs

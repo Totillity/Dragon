@@ -128,8 +128,16 @@ class Parser:
         elif stream.curr.type == 'macro':
             stream = self.parse_macro(stream)
             return stream, None
+        elif stream.curr.type == "import":
+            return self.parse_import(stream)
         else:
             raise stream.error(f"Cannot parse a top level statement from a '{stream.curr.type}' token")
+
+    @parsing_method
+    def parse_import(self, stream: Stream):
+        stream, _ = stream.expect("import")
+        stream, file = stream.expect("str")
+        return stream, Import(file.text[1:-1])
 
     def parse_macro(self, stream: Stream) -> Stream:
         stream, _ = stream.expect("macro")

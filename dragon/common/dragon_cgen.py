@@ -141,16 +141,21 @@ class ClassType(DataType):
 
 
 class GenericClassType(DataType):
-    def __init__(self, name: str, type_vars: List[str], node):
+    def __init__(self, name: str, type_vars: List[str], node, scope):
         self.name = name
         self.type_vars = type_vars
         self.node = node
+        self.scope = scope
 
         self.generics: Dict[Tuple[str, ...], ClassType] = {}
 
 
 class NullType(DataType):
     typ = "int"
+
+
+def dragon_function(args: List[Type], ret: Type):
+    return PointerType(FunctionType(args, ret))
 
 
 Object = ClassType("Object", [])

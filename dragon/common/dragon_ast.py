@@ -13,7 +13,7 @@ __all__ = ['Node',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
-           'TopLevel', 'Function', 'Class', 'GenericClass',
+           'TopLevel', 'Function', 'Class', 'GenericClass', 'Import',
 
            'Program', ]
 
@@ -221,6 +221,11 @@ class Function(TopLevel):
     args: Dict[str, Type]
     ret: Type
     body: List[Stmt]
+
+
+@dataclass()
+class Import(TopLevel):
+    file: str
 
 
 @dataclass()

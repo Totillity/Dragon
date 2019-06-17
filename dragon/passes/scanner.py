@@ -151,6 +151,10 @@ def scan(text: str) -> List[Token]:
                     tokens.append(
                         Token("endmacro", "endmacro", state.line, (state.line_pos, state.line_pos + len("endmacro"))))
                     expect("endmacro")
+                elif hashcode == "import":
+                    tokens.append(
+                        Token("import", "import", state.line, (state.line_pos, state.line_pos + len("import"))))
+                    advance(len("import"))
                 else:
                     raise ScanningError(f"Unknown hashcode: {hashcode}", state.line,
                                         (state.line_pos, state.line_pos + len(hashcode)))
