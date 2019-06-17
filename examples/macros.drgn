@@ -1,0 +1,32 @@
+
+# Macros in dragon are far more powerful than C macros, they do parsing
+# A proper understanding of the internals of the parser is required to use macros to their fullest extent
+
+# The for loop is not builtin, but can be expressed as a macro
+#macro $( FOR($init:stmt $cond:expr; $each:expr) $body:stmt )$ => stmt:
+       $( {
+              $init
+              while ($cond) {
+                  $body
+                  $each;
+              }
+          } )$
+#endmacro
+
+
+# A trivial, useless macro demonstrating how token matching, not parentheses matching, occurs
+#macro $( DOUBLE $val:expr class )$ => expr: $( $val * 2 )$ #endmacro
+
+# Or, like in C, define constants
+#macro $( SPEED_LIMIT )$ => expr: $( 40 )$ #endmacro
+
+
+def main() -> int {
+    FOR(var i: int = 0; i < 10; i = i + 1) {
+        print(i);
+    }
+
+    print(DOUBLE 3 class);
+    print(SPEED_LIMIT);
+    return 0;
+}

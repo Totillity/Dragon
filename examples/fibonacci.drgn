@@ -1,0 +1,19 @@
+
+# Since dragon translates to C, which has the best compilers and optimizers in the world,
+# even fibo(35) can run in milliseconds, while Python takes 4.5 seconds, or at 100 times the speed
+
+
+def fibo(n: int) -> int {
+    if (n < 2) {
+        return n;
+    } else {
+        return fibo(n-1) + fibo(n-2);
+    }
+}
+
+
+def main() -> int {
+    var at_12: int = fibo(12);
+    print(at_12);
+    return 0;
+}

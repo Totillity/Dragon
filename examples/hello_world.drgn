@@ -1,0 +1,7 @@
+# The print function takes one string, and that is it.
+# Strings must be in double quotes, and support string escapes.
+
+def main() -> int {
+    print("Hello world!");
+    return 0;
+}

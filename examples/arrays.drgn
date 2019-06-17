@@ -1,4 +1,15 @@
 
+# Builtin support for array has not arrived
+# In the meantime, this is a great example of generics
+# The _Array class is builtin, and has a C implementation found in std_files/list.c
+# It defines:
+#   * its constructor, which takes a size as an int
+#   * get_item(index: int) -> Object, which returns the object at that index
+#   * set_item(index: int, val: Object) -> void, which sets that index to val
+# But casts must be done to get everything to the right type, as _Array does everything in the base Object type
+# Our wrapper Array does that for us through generics
+
+# This macro handles null checks by terminating the program is something is null
 #macro $( CHECK_NULL($val:expr) )$ => stmt:
        $( if (is_null($val)) {
               print("Is null, terminating");
@@ -18,7 +29,6 @@
 #endmacro
 
 
-
 class Array<T> {
     attr _arr: _Array;
     attr size: int;
@@ -35,10 +45,10 @@ class Array<T> {
     }
 
     method set_item(index: int, val: T) -> void {
+        # val is automatically cast to an Object
         self._arr.set_item(index, val);
     }
 }
-
 
 
 def main() -> int {
@@ -52,6 +62,5 @@ def main() -> int {
         print(arr.get_item(i));
     }
 
-    print("this is working");
     return 0;
 }
