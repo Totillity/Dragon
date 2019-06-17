@@ -10,12 +10,17 @@ Email: totillity@gmail.com
 
 ### How to use
 
+IMPORTANT: **YOU NEED CLANG** (the compiler, which you can get ![here](http://releases.llvm.org/download.html#8.0.0)), 
+or you can specify the compiler through setting the 
+approriate command line flag (see \_\_main__.py) or through passing `compiler='gcc'` or whatever your compiler is in the 
+run.py functions.
+
 If the dragon module is in your PYTHONPATH, you can just do `python -m dragon {name of file to run}.drgn`, 
 optionally followed by a `--run` flag to immediately run instead of just compiling.
 
 Alternatively, your python script can invoke the functions found in the `dragon.run` file
 
-To see more syntax and usage, look at the test.drgn file in the root directory
+To see more syntax and usage, look at the examples folder. The run_examples.py file in it can be run to run all the examples.
 
 ### Syntax
 The syntax is similar to every other c-family language out there.
