@@ -31,7 +31,7 @@ macro_basic_tokens = sorted([
 
 
 keywords = [
-    "var",
+    "var", "del",
     "def", "class",
     "method", "attr",
     "if", "else",

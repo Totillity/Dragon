@@ -1,0 +1,9 @@
+
+def main() -> int {
+    var obj: String = "hi\n";
+    var num: int = 3;
+    print(obj);
+    print(num);
+    print("Finished Successfully\n");
+    return 0;
+}

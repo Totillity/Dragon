@@ -357,10 +357,19 @@ class Parser:
             # if stream.curr.text in stream.macro_symbols["stmt"]:
             stream, ident = stream.advance()
             return stream, stream.macro_symbols["stmt"][ident.text]
+        elif stream.curr.type == "del":
+            return self.parse_delete(stream)
         # else:
         #     raise stream.error(f"Statement meta-identifier {stream.curr.text} is not defined")
         else:
             return self.parse_expr_stmt(stream)
+
+    @parsing_method
+    def parse_delete(self, stream: Stream):
+        stream, _ = stream.expect("del")
+        stream, obj = self.parse_expr(stream)
+        stream, _ = stream.expect(";")
+        return stream, DeleteStmt(obj)
 
     @parsing_method
     def parse_block(self, stream: Stream):

@@ -151,6 +151,17 @@ class Environment:
             else:
                 raise KeyError(name)
 
+    def func_vars(self) -> Dict[str, VarMeta]:
+        def add_dict(d1, d2):
+            d3 = d1.copy()
+            d3.update(d2)
+            return d3
+
+        if self.name.startswith("func "):
+            return add_dict(self.vars, {})
+        else:
+            return add_dict(self.parent.func_vars(), self.vars)
+
 
 def inherited_methods(cls_type: cgen.ClassType):
     for base in cls_type.bases:
@@ -375,7 +386,7 @@ class Resolver(Visitor):
     def visit_Method(self, node: ast.Method):
         type = node.meta["type"]
 
-        old_scope, new_scope = self.names.new_scope()
+        old_scope, new_scope = self.names.new_scope(f"func {node.name}")
         self.names: Environment = new_scope
 
         self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
@@ -397,7 +408,7 @@ class Resolver(Visitor):
     def visit_Constructor(self, node: ast.Constructor):
         type = node.meta["type"]
 
-        old_scope, new_scope = self.names.new_scope()
+        old_scope, new_scope = self.names.new_scope("func new")
         self.names: Environment = new_scope
 
         # self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
@@ -420,7 +431,7 @@ class Resolver(Visitor):
         type = node.meta["type"]
         returns = []
 
-        old_scope, new_scope = self.names.new_scope()
+        old_scope, new_scope = self.names.new_scope(f"func {node.name}")
         self.names: Environment = new_scope
 
         c_names = self.names.extend_vars({arg: typ for arg, typ in node.meta["args"].items()})
@@ -463,11 +474,19 @@ class Resolver(Visitor):
         node.meta["c_name"] = c_name
         return []
 
+    def visit_DeleteStmt(self, node: ast.DeleteStmt):
+        self.visit(node.obj)
+        node.meta["temp"] = self.names.next("temp")
+        return []
+
     def visit_ExprStmt(self, node: ast.ExprStmt):
         self.visit(node.expr)
         return []
 
     def visit_ReturnStmt(self, node: ast.ReturnStmt):
+        to_delete = {name: typ.c_name for name, typ in self.names.func_vars().items() if
+                     isinstance(typ.type, cgen.ClassType)}
+        node.meta["to delete"] = to_delete
         return [self.visit(node.expr)]
 
     def visit_GetVar(self, node: ast.GetVar):
@@ -566,9 +585,9 @@ class Resolver(Visitor):
             node.meta["val"] = int(node.val)
             return cgen.IntType()
         elif node.type == "str":
-            node.meta["ret"] = cgen.StringType()
+            node.meta["ret"] = cgen.String
             node.meta["val"] = node.val[1:-1]
-            return cgen.StringType()
+            return cgen.String
         else:
             raise Exception(node)
 

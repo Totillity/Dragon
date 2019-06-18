@@ -71,6 +71,7 @@ class Compiler(Visitor):
     def visit_Class(self, node: ast.Class, is_main=False):
         cls_type: cgen.ClassType = node.meta["type"]
         has_constructor = node.meta["has_constructor"]
+        has_destructor = False  # TODO: node.meta["has destructor"]
 
         cls_struct = cgen.Struct(node.meta["c_name"], {
             'meta': cgen.StructType("BaseObject"),
@@ -85,8 +86,17 @@ class Compiler(Visitor):
 
         new_empty = cgen.Function("new_empty_"+node.meta["c_name"], {}, cls_type, [
             cgen.Declare(cls_type, "obj", cgen.Call(cgen.GetVar("malloc"), [cgen.SizeOf(cls_struct.struct_type)])),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "self", cgen.GetVar("obj"))),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "up", cgen.GetVar("obj"))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "self",
+                                       cgen.GetVar("obj"))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "up",
+                                       cgen.GetVar("obj"))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_count",
+                                       cgen.Constant(0))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_ptr",
+                                       cgen.Ref(cgen.GetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_count")))),
+            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "del",
+                                       cgen.GetVar("del_" + node.meta["c_name"]))),
+
 
             *(
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("new_parent_"+base.name), [cgen.Ref(cgen.GetArrow(cgen.GetVar("obj"), 'parent_'+base.name)), cgen.GetVar('obj'), cgen.GetVar('obj')]))
@@ -166,6 +176,13 @@ class Compiler(Visitor):
             cls_type.c_names["new"] = new.name
             body_stmt_items.append(new)
 
+        if not has_destructor:
+            del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cls_type}, cgen.VoidType(), [
+                cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("obj")]))
+            ])
+            cls_type.c_names["del"] = del_.name
+            body_stmt_items.append(del_)
+
         return [cls_struct, new_empty, new_parent] + redirects + body_stmt_items
 
     def visit_Attr(self, node: ast.Attr):
@@ -196,6 +213,14 @@ class Compiler(Visitor):
             body.append(self.visit(stmt))
         return [cgen.Function(node.meta["c_name"], node.meta["c args"], node.meta["ret"], body)]
 
+    def visit_DeleteStmt(self, node: ast.DeleteStmt):
+        return cgen.Block([
+            cgen.Declare(cgen.PointerType(cgen.BaseObject), node.meta["temp"],
+                         cgen.GetAttr(cgen.GetArrow(self.visit(node.obj), "meta"), "self")),
+            cgen.ExprStmt(
+                cgen.Call(cgen.GetArrow(cgen.GetVar(node.meta["temp"]), "del"), [cgen.GetVar(node.meta["temp"])]))
+        ])
+
     def visit_IfStmt(self, node: ast.IfStmt):
         return cgen.If(self.visit(node.cond), self.visit(node.then_do), self.visit(node.else_do))
 
@@ -206,13 +231,23 @@ class Compiler(Visitor):
         return cgen.Block([self.visit(stmt) for stmt in node.stmts])
 
     def visit_VarStmt(self, node: ast.VarStmt):
-        return cgen.Declare(node.meta["type"], node.meta["c_name"], self.coerce_node(node.val, node.meta["type"]))
+        if isinstance(node.val.meta["ret"], cgen.ClassType):
+            return cgen.UnscopedBlock([
+                cgen.Declare(node.meta["type"], node.meta["c_name"], self.coerce_node(node.val, node.meta["type"])),
+                cgen.ExprStmt(cgen.Call(cgen.GetVar("DRGN_INCREF"), [cgen.GetVar(node.meta["c_name"])]))
+            ])
+        else:
+            return cgen.Declare(node.meta["type"], node.meta["c_name"], self.coerce_node(node.val, node.meta["type"]))
 
     def visit_ExprStmt(self, node: ast.ExprStmt):
         return cgen.ExprStmt(self.visit(node.expr))
 
     def visit_ReturnStmt(self, node: ast.ReturnStmt):
-        return cgen.Return(self.visit(node.expr))
+        to_delete: Dict[str, str] = node.meta["to delete"]
+        dels = cgen.UnscopedBlock(
+            [cgen.ExprStmt(cgen.Call(cgen.GetVar("DRGN_DECREF"), [cgen.GetVar(c_name)])) for c_name in
+             to_delete.values()])
+        return cgen.UnscopedBlock([dels, cgen.Return(self.visit(node.expr))])
 
     def visit_New(self, node: ast.New):
         return cgen.Call(cgen.GetVar(node.meta["cls"].c_names["new"]), [self.visit(arg) for arg in node.args])
@@ -228,16 +263,13 @@ class Compiler(Visitor):
         else:
             if isinstance(from_type, to_type.__class__):
                 return expr
-            primitives: Dict[Type[cgen.Type], cgen.ClassType] = {cgen.IntType: cgen.Integer,
-                                                                 cgen.StringType: cgen.String}
+
             if isinstance(to_type, cgen.ClassType):
-                try:
-                    wrapper = primitives[type(from_type)]
-                except KeyError:
-                    raise Exception(from_type, to_type)
+                if isinstance(from_type, cgen.IntType):
+                    as_object = cgen.Call(cgen.GetVar("_new_Integer"), [expr])
+                    return cgen.Ref(cgen.Integer.cast_expr(cgen.Deref(as_object), to_type))
                 else:
-                    as_object = cgen.Call(cgen.GetVar("_new_"+wrapper.name), [expr])
-                    return cgen.Ref(wrapper.cast_expr(cgen.Deref(as_object), to_type))
+                    raise Exception(from_type, to_type)
             else:
                 raise CompilingError(f"Cannot coerce {from_type} to {to_type}", node.line, node.pos)
 
@@ -297,6 +329,10 @@ class Compiler(Visitor):
             return obj
 
     def visit_Literal(self, node: ast.Literal):
+        if isinstance(node.meta["val"], str):
+            val: str = node.meta["val"]
+            esc_val = val.encode("utf-8").decode("unicode_escape")
+            return cgen.Call(cgen.GetVar("_new_String"), [cgen.Constant(val), cgen.Constant(len(esc_val))])
         return cgen.Constant(node.meta["val"])
 
     def visit_Grouping(self, node: ast.Grouping):

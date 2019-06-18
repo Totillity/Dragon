@@ -336,6 +336,17 @@ class Block(Statement):
 
 
 @dataclass()
+class UnscopedBlock(Statement):
+    stmts: List[Statement]
+
+    def generate(self, indent=0):
+        return "    " * indent + " ".join(stmt.generate(0)
+                                          if not isinstance(stmt, UnscopedBlock)
+                                          else (stmt.generate(0) + "\n" + "    " * indent)[:-1]
+                                          for stmt in self.stmts)
+
+
+@dataclass()
 class Return(Statement):
     expr: Expression
 

@@ -158,6 +158,9 @@ def dragon_function(args: List[Type], ret: Type):
     return PointerType(FunctionType(args, ret))
 
 
+BaseObject = StructType("BaseObject")
+
+
 Object = ClassType("Object", [])
 
 Integer = ClassType("Integer", [Object])

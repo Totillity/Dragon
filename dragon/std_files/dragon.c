@@ -5,6 +5,8 @@
 #include <string.h>
 #include <time.h>
 
+struct BaseObject;
+
 struct Object;
 
 struct String;
@@ -21,10 +23,7 @@ struct String* Object_to_string(void* _self) {
     char buffer[100];
 
     int len = snprintf(buffer, 100, "%p", self);
-    char* chars = calloc(len+1, sizeof(char));
-    chars[len] = '\0';
-    strncpy(chars, buffer, len+1);
-    return _new_String(chars);
+    return _new_String(buffer, len);
 }
 
 
@@ -34,14 +33,25 @@ void new_parent_Object(struct Object* parent_ptr, void* child_ptr, void* self_pt
 }
 
 
-struct String* _new_String(char* chars) {
+void del_String(void* obj) {
+    struct String* str = obj;
+    // printf("Freeing str %s\n", str->str);
+    free(str->str);
+    free(str);
+}
+
+
+struct String* _new_String(char* chars, int len) {
     struct String* obj = malloc(sizeof(struct String));
 
-    (*obj).str = chars;
-    (*obj).len = strlen(chars);
+    (*obj).str = memcpy(calloc(len, sizeof(char)), chars, len);
+    (*obj).len = len;
 
     obj->meta.self = obj;
     obj->meta.up = obj;
+    obj->meta.ref_count = 0;
+    obj->meta.ref_ptr = &(obj->meta.ref_count);
+    obj->meta.del = del_String;
 
     new_parent_Object((&obj->parent_Object), obj, obj);
 
@@ -69,12 +79,22 @@ void new_parent_Integer(struct Integer* parent_ptr, void* child_ptr, void* self_
 }
 
 
+void del_Integer(void* obj) {
+    struct Integer* num = obj;
+    free(num);
+}
+
+
 struct Integer* _new_Integer(int num) {
     struct Integer* obj = malloc(sizeof(struct Integer));
     obj->num = num;
 
     obj->meta.self = obj;
     obj->meta.up = obj;
+
+    obj->meta.ref_count = 0;
+    obj->meta.ref_ptr = &(obj->meta.ref_count);
+    obj->meta.del = del_Integer;
 
     new_parent_Object((&obj->parent_Object), obj, obj);
 
@@ -86,14 +106,10 @@ struct Integer* _new_Integer(int num) {
 
 struct String* Integer_to_string(void* _self) {
     struct Integer* self = _self;
-
     char buffer[100];
 
     int len = snprintf(buffer, 100, "%i", self->num);
-    char* chars = calloc(len+1, sizeof(char));
-    chars[len] = '\0';
-    strncpy(chars, buffer, len+1);
-    return _new_String(chars);
+    return _new_String(buffer, len);
 }
 
 // struct Integer* new_Integer(void* _obj) {
@@ -102,16 +118,17 @@ struct String* Integer_to_string(void* _self) {
 
 
 void print(struct Object* _obj) {
+    DRGN_INCREF(_obj);
     struct String* str = _obj->to_string(_obj->meta.self);
 
-    // puts(str->str);
-    printf("%s\n", str->str);
+    for (int i = 0; i < str->len; i++) {
+        putchar(str->str[i]);
+    }
     fflush(stdout);
+    DRGN_DECREF(_obj);
 }
 
 
 int dragon_clock() {
-    // int t = clock() / CLOCKS_PER_SEC;
-    // printf("time: %f\n", ((double) clock()) / CLOCKS_PER_SEC);
     return clock() * 1000 / CLOCKS_PER_SEC;
 }

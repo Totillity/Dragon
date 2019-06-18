@@ -9,7 +9,7 @@ __all__ = ['Node',
            'Expr', 'Call', 'Literal', 'GetVar', 'BinOp',
            'GetAttr', 'SetAttr', 'SetVar', 'Cast', 'Grouping', 'New', 'Unary',
 
-           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt', 'Block', 'IfStmt', 'WhileStmt',
+           'Stmt', 'ReturnStmt', 'ExprStmt', 'VarStmt', 'Block', 'IfStmt', 'WhileStmt', 'DeleteStmt',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
@@ -159,6 +159,11 @@ class VarStmt(Stmt):
     name: str
     typ: Type
     val: Expr
+
+
+@dataclass()
+class DeleteStmt(Stmt):
+    obj: Expr
 
 
 @dataclass()
