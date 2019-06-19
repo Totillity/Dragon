@@ -171,7 +171,7 @@ class Compiler(Visitor):
             body_stmt_items.append(new)
 
         if not has_destructor:
-            del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cls_type}, cgen.Void, [
+            del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cgen.VoidPtr}, cgen.Void, [
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("obj")]))
             ])
             cls_type.c_names["del"] = del_.name
