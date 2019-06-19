@@ -1,0 +1,62 @@
+class Person {
+    attr name: String;
+    attr age: int;
+
+    new(name: String, age: int) {
+        self.name = name;
+        self.age = age;
+    }
+
+    method say_hi(other: Person) -> void {
+        print("Hi, ");
+        print(other.name);
+        print(", I'm ");
+        print(self.name);
+        print("!\n");
+    }
+}
+
+
+class ChessPlayer {
+    attr rating: int;
+
+    new(rating: int) {
+        self.rating = rating;
+    }
+
+    method make_move() -> int {
+        return self.rating;
+    }
+}
+
+
+class HumanPlayer(Person, ChessPlayer) {
+    new(name: String, age: int) {
+        self.name = name;
+        self.age = age;
+        self.rating = age * 100;
+    }
+
+    method say_hi(other: Person) -> void {
+        print("I'm too good for you\n");
+    }
+}
+
+
+def main() -> int {
+    var jane: Person = new Person("Jane", 32);
+    var bob: Person = new Person("Bob", 53);
+
+    jane.say_hi(bob);
+
+    var bill: HumanPlayer = new HumanPlayer("Bill", 20);
+
+    jane.say_hi(bill);
+    bill.say_hi(jane);
+
+    var regular_bill: Person = bill;
+
+    regular_bill.say_hi(jane);
+
+    return 0;
+}

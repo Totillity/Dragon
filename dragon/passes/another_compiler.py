@@ -80,20 +80,14 @@ class Compiler(Visitor):
 
         new_empty = cgen.Function("new_empty_"+node.meta["c_name"], {}, cls_type, [
             cgen.Declare(cls_type, "obj", cgen.Call(cgen.GetVar("malloc"), [cgen.SizeOf(cls_struct.struct_type)])),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "self",
-                                       cgen.GetVar("obj"))),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "up",
-                                       cgen.GetVar("obj"))),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_count",
-                                       cgen.Constant(0))),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_ptr",
-                                       cgen.Ref(cgen.GetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "ref_count")))),
-            cgen.ExprStmt(cgen.SetAttr(cgen.GetArrow(cgen.GetVar("obj"), "meta"), "del",
-                                       cgen.GetVar("del_" + node.meta["c_name"]))),
-
-
+            cgen.StrStmt(f"obj->meta.self = obj;\n"
+                         f"obj->meta.up = obj;\n"
+                         f"obj->meta.ref_count = 0;\n"
+                         f"obj->meta.ref_ptr = &(obj->meta.ref_count);\n"
+                         f"obj->meta.del = del_{node.meta['c_name']};"),
             *(
-                cgen.ExprStmt(cgen.Call(cgen.GetVar("new_parent_"+base.name), [cgen.Ref(cgen.GetArrow(cgen.GetVar("obj"), 'parent_'+base.name)), cgen.GetVar('obj'), cgen.GetVar('obj')]))
+                # cgen.ExprStmt(cgen.Call(cgen.GetVar("new_parent_"+base.name), [cgen.Ref(cgen.GetArrow(cgen.GetVar("obj"), 'parent_'+base.name)), cgen.GetVar('obj'), cgen.GetVar('obj')])) +
+                cgen.StrStmt(f"new_parent_{base.name}(&obj->parent_{base.name}, obj, obj);")
                 for base in cls_type.bases
             ),
 
@@ -295,7 +289,11 @@ class Compiler(Visitor):
         cls: cgen.ClassType = node.obj.meta["ret"]
         expected = cls.get_name(node.attr)
         coerced = self.coerce_node(node.val, expected)
-        return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr, coerced)
+        if cgen.is_cls(expected):
+            return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr,
+                                     cgen.Call(cgen.GetVar("drgn_inc_ref"), [coerced]))
+        else:
+            return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr, coerced)
 
     def visit_BinOp(self, node: ast.BinOp):
         return cgen.BinOp(self.visit(node.left), node.op, self.visit(node.right))

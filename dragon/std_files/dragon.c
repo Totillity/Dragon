@@ -13,6 +13,13 @@ struct String;
 
 struct Integer;
 
+
+void* drgn_inc_ref(void* obj) {
+    (*((struct BaseObject*) ((struct BaseObject*) obj)->self)->ref_ptr)++;
+    return obj;
+}
+
+
 bool is_null(struct Object* obj) {
     return obj->meta.self == NULL;
 }

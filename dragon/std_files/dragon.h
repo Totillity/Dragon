@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define GET_META(obj) ((struct BaseObject*) obj->meta.self)
+#define GET_META(obj) ((struct BaseObject*) (obj)->meta.self)
 
 #define DRGN_INCREF(obj) (*(GET_META(obj)->ref_ptr))++
 
@@ -60,6 +60,9 @@ struct Integer {
 
     int num;
 };
+
+
+void* drgn_inc_ref(void*);
 
 
 bool is_null(struct Object*);

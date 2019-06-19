@@ -13,6 +13,7 @@ programs = [
     'arrays',
     'imports',
     'on_delete',
+    'classes'
 ]
 
 for program in programs:
