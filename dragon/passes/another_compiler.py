@@ -24,10 +24,6 @@ class Compiler(Visitor):
         list_h = str(c_files / "list.h")
 
         top_levels = [
-            # cgen.Include("stdio.h"),
-            # cgen.Include("stdlib.h"),
-            # cgen.Include("stdbool.h"),
-
             cgen.Include(dragon_h, angled=False),
             cgen.Include(list_h, angled=False)
         ]
@@ -39,7 +35,7 @@ class Compiler(Visitor):
             if self.main_func == '':
                 raise CompilingError("No main function", -1, (0, 0))
 
-            top_levels.append(cgen.Function("main", {}, cgen.IntType(), [
+            top_levels.append(cgen.Function("main", {}, cgen.CInt, [
                 cgen.Return(cgen.Call(cgen.GetVar(self.main_func), []))
             ]))
 
@@ -48,10 +44,8 @@ class Compiler(Visitor):
         return program
 
     def default_of(self, type: cgen.Type):
-        if isinstance(type, cgen.IntType):
+        if cgen.is_int(type):
             return cgen.Constant(0)
-        elif (isinstance(type, cgen.PointerType) and isinstance(type.pointee, cgen.CharType)) or isinstance(type, cgen.StringType):
-            return cgen.Constant("")
         else:
             return cgen.Constant(None)
             # raise Exception(type)
@@ -117,11 +111,11 @@ class Compiler(Visitor):
 
         redirects = []
         for method_name, method_c_name in node.meta["inherited methods"].items():
-            redirect_type: cgen.Type = cls_type.get_name(method_name)
-            assert isinstance(redirect_type, cgen.PointerType), f"{redirect_type}"
+            redirect_type: cgen.PointerType = cls_type.get_name(method_name)
+            assert cgen.is_func_ptr(redirect_type)
             redirect_to: cgen.FunctionType = redirect_type.pointee
 
-            args = {'_self': cgen.VoidPointerType()}
+            args = {'_self': cgen.VoidPtr}
             args.update({"arg_"+str(i): arg_type for i, arg_type in enumerate(redirect_to.args[1:])})
 
             passed_args = [cgen.Ref(cls_type.cast_for_name_expr(cgen.Deref(cgen.GetVar('self')), method_name))]
@@ -145,9 +139,9 @@ class Compiler(Visitor):
                                          ])
             redirects.append(redirect)
 
-        new_parent = cgen.Function("new_parent_"+node.meta["c_name"],
-                                   {'parent_ptr': cls_type, 'child_ptr': cgen.VoidPointerType(), 'self_ptr': cgen.VoidPointerType()},
-                                   cgen.VoidType(), [
+        new_parent = cgen.Function("new_parent_" + node.meta["c_name"],
+                                   {'parent_ptr': cls_type, 'child_ptr': cgen.VoidPtr, 'self_ptr': cgen.VoidPtr},
+                                   cgen.Void, [
                                        cgen.ExprStmt(
                                            cgen.SetAttr(cgen.GetArrow(cgen.GetVar("parent_ptr"), "meta"), 'self',
                                                         cgen.GetVar('self_ptr'))),
@@ -177,7 +171,7 @@ class Compiler(Visitor):
             body_stmt_items.append(new)
 
         if not has_destructor:
-            del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cls_type}, cgen.VoidType(), [
+            del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cls_type}, cgen.Void, [
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("obj")]))
             ])
             cls_type.c_names["del"] = del_.name
@@ -231,7 +225,7 @@ class Compiler(Visitor):
         return cgen.Block([self.visit(stmt) for stmt in node.stmts])
 
     def visit_VarStmt(self, node: ast.VarStmt):
-        if isinstance(node.val.meta["ret"], cgen.ClassType):
+        if cgen.is_cls(node.val.meta["ret"]):
             return cgen.UnscopedBlock([
                 cgen.Declare(node.meta["type"], node.meta["c_name"], self.coerce_node(node.val, node.meta["type"])),
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("DRGN_INCREF"), [cgen.GetVar(node.meta["c_name"])]))
@@ -254,18 +248,15 @@ class Compiler(Visitor):
 
     @classmethod
     def coerce_expr(cls, expr: cgen.Expression, from_type: cgen.Type, to_type: cgen.Type, node):
-        if isinstance(from_type, cgen.ClassType) and isinstance(to_type, cgen.ClassType):
-            if from_type is to_type:
-                return expr
-            else:
+        if from_type is to_type:
+            return expr
 
-                return cgen.Ref(from_type.cast_expr(cgen.Deref(expr), to_type))
+        if cgen.is_cls(from_type) and cgen.is_cls(to_type):
+            # noinspection PyUnresolvedReferences
+            return cgen.Ref(from_type.cast_expr(cgen.Deref(expr), to_type))
         else:
-            if isinstance(from_type, to_type.__class__):
-                return expr
-
-            if isinstance(to_type, cgen.ClassType):
-                if isinstance(from_type, cgen.IntType):
+            if cgen.is_cls(to_type):
+                if cgen.is_int(from_type):
                     as_object = cgen.Call(cgen.GetVar("_new_Integer"), [expr])
                     return cgen.Ref(cgen.Integer.cast_expr(cgen.Deref(as_object), to_type))
                 else:
@@ -318,7 +309,7 @@ class Compiler(Visitor):
             to_type = node.meta["ret"]
             obj = self.visit(node.obj)
             from_type = node.obj.meta["ret"]
-            if not isinstance(to_type, cgen.ClassType):
+            if not cgen.is_cls(to_type):
                 # TODO: Error message
                 raise Exception()
             path = to_type.path_to_parent(from_type)[1:]

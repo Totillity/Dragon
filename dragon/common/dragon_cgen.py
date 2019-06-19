@@ -154,8 +154,37 @@ class NullType(DataType):
     typ = "int"
 
 
+class CustomType(DataType):
+    def __init__(self, typ):
+        self.typ = typ
+
+
 def dragon_function(args: List[Type], ret: Type):
     return PointerType(FunctionType(args, ret))
+
+
+def is_int(typ):
+    return typ is Int
+
+
+def is_cls(typ):
+    return isinstance(typ, ClassType)
+
+
+def is_func_ptr(typ):
+    return isinstance(typ, PointerType) and isinstance(typ.pointee, FunctionType)
+
+
+def FuncType(args: List[Type], ret: Type):
+    return PointerType(FunctionType(args, ret))
+
+
+CInt = IntType()
+
+Void = VoidType()
+VoidPtr = PointerType(Void)
+Int = CustomType("int32_t")
+Bool = BoolType()
 
 
 BaseObject = StructType("BaseObject")
@@ -167,13 +196,12 @@ Integer = ClassType("Integer", [Object])
 String = ClassType("String", [Object])
 C_Array = ClassType("_Array", [Object])
 
-
-Object.methods = {"to_string": PointerType(FunctionType([Object], String))}
+Object.methods = {"to_string": FuncType([Object], String)}
 Object.c_names = {"to_string": "Object_to_string"}
 
-C_Array.methods = {"get_item": PointerType(FunctionType([C_Array, IntType()], Object)),
-                   "set_item": PointerType(FunctionType([C_Array, IntType(), Object], VoidType()))}
-C_Array.other = {"new": PointerType(FunctionType([IntType()], C_Array))}
+C_Array.methods = {"get_item": FuncType([C_Array, Int], Object),
+                   "set_item": FuncType([C_Array, Int, Object], Void)}
+C_Array.other = {"new": FuncType([Int], C_Array)}
 C_Array.c_names = {"get_item": "_Array_get_item",
                    "set_item": "_Array_set_item",
                    "new": "new__Array"}

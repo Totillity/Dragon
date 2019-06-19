@@ -28,57 +28,6 @@ class Module:
         # TODO: Copy modules too?
 
 
-# class Environment:
-#     def __init__(self):
-#         self.vars: List[Dict[str, VarMeta]] = []
-#         self.types: List[Dict[str, cgen.Type]] = []
-#
-#         self.count = itertools.count()
-#
-#     def next(self, name: str):
-#         return name + "_" + str(next(self.count))
-#
-#     def new_scope(self, names: Dict[str, cgen.Type] = None):
-#         if names is None:
-#             names = {}
-#         else:
-#             names = {name: VarMeta(self.next(name), type) for name, type in names.items()}
-#
-#         self.vars.append(names)
-#         self.types.append({})
-#
-#     def end_scope(self):
-#         self.types.pop()
-#         return self.vars.pop()
-#
-#     def new_var(self, var: str, type: cgen.Type, builtin=False, c_name=None) -> str:
-#         if builtin:
-#             if c_name is None:
-#                 c_name = var
-#         else:
-#             c_name = self.next(var)
-#         self.vars[-1][var] = VarMeta(c_name, type)
-#         return c_name
-#
-#     def extend_vars(self, vars: Dict[str, cgen.Type], builtin=False):
-#         return [self.new_var(var, type, builtin) for var, type in vars.items()]
-#
-#     def get_var(self, var: str) -> VarMeta:
-#         for scope in self.vars:
-#             if var in scope:
-#                 return scope[var]
-#         raise KeyError(var)
-#
-#     def new_type(self, name: str, type: cgen.Type):
-#         self.types[-1][name] = type
-#
-#     def get_type(self, name: str) -> cgen.Type:
-#         for scope in self.types:
-#             if name in scope:
-#                 return scope[name]
-#         raise KeyError(name)
-
-
 class Environment:
     def __init__(self, vars: Dict[str, cgen.Type], types: Dict[str, cgen.Type], name: str = None,
                  parent: 'Environment' = None):
@@ -172,14 +121,13 @@ class Resolver(Visitor):
     def __init__(self):
         self.names: Environment = Environment(
             {
-                "print": cgen.dragon_function([cgen.Object], cgen.VoidType()),
-                "exit": cgen.dragon_function([cgen.IntType()], cgen.VoidType()),
-                "is_null": cgen.dragon_function([cgen.Object], cgen.BoolType()),
+                "print": cgen.dragon_function([cgen.Object], cgen.Void),
+                "exit": cgen.dragon_function([cgen.Int], cgen.Void),
+                "is_null": cgen.dragon_function([cgen.Object], cgen.Bool),
             },
             {
-                "int": cgen.IntType(),
-                "str": cgen.StringType(),
-                "void": cgen.VoidType(),
+                "int": cgen.Int,
+                "void": cgen.Void,
                 "Object": cgen.Object,
                 "Integer": cgen.Integer,
                 "String": cgen.String,
@@ -187,7 +135,7 @@ class Resolver(Visitor):
             }
         )
 
-        self.names.new_var("clock", cgen.dragon_function([], cgen.IntType()), builtin=True, c_name='dragon_clock')
+        self.names.new_var("clock", cgen.dragon_function([], cgen.Int), builtin=True, c_name='dragon_clock')
         self.names.new_var("null", cgen.NullType(), builtin=True, c_name='NULL')
 
         self.MODULE_MODE = False
@@ -256,9 +204,9 @@ class Resolver(Visitor):
 
         for top_level in node.top_level:
             if isinstance(top_level, ast.Function):
-                type = cgen.PointerType(cgen.FunctionType([self.visit(arg)
-                                                           for _, arg
-                                                           in top_level.args.items()], self.visit(top_level.ret)))
+                type = cgen.FuncType([self.visit(arg)
+                                      for _, arg
+                                      in top_level.args.items()], self.visit(top_level.ret))
                 c_name = self.names.new_var(top_level.name, type)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
@@ -327,11 +275,11 @@ class Resolver(Visitor):
 
                 body_stmt.meta["type"] = type
             elif isinstance(body_stmt, ast.Method):
-                args = [cgen.VoidPointerType()]
+                args = [cgen.VoidPtr]
                 args.extend(self.visit(arg) for arg in body_stmt.args.values())
                 ret = self.visit(body_stmt.ret)
 
-                type = cgen.PointerType(cgen.FunctionType(args, ret))
+                type = cgen.FuncType(args, ret)
 
                 c_name = self.names.next(body_stmt.name)
 
@@ -350,7 +298,7 @@ class Resolver(Visitor):
                 args = [self.visit(arg) for arg in body_stmt.args.values()]
                 ret = cls_type
 
-                type = cgen.PointerType(cgen.FunctionType(args, ret))
+                type = cgen.FuncType(args, ret)
 
                 c_name = self.names.next(node.name + "_new")
 
@@ -389,11 +337,10 @@ class Resolver(Visitor):
         old_scope, new_scope = self.names.new_scope(f"func {node.name}")
         self.names: Environment = new_scope
 
-        self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
+        self.names.new_var("_self", cgen.VoidPtr, builtin=True)
         self.names.new_var('self', node.meta["cls"], builtin=True)
         c_names = self.names.extend_vars(node.meta["other args"])
-        # print(node.meta["other args"].items())
-        node.meta["args"] = {'_self': cgen.VoidPointerType(), **dict(zip(c_names, node.meta["other args"].values()))}
+        node.meta["args"] = {'_self': cgen.VoidPtr, **dict(zip(c_names, node.meta["other args"].values()))}
         returns = []
         for stmt in node.body:
             returns.extend(self.visit(stmt))
@@ -415,7 +362,7 @@ class Resolver(Visitor):
         self.names.new_var('self', node.meta["cls"], builtin=True)
         c_names = self.names.extend_vars(node.meta["other args"])
 
-        node.meta["args"] = {**dict(zip(c_names, node.meta["other args"].values()))}
+        node.meta["args"] = dict(zip(c_names, node.meta["other args"].values()))
 
         for stmt in node.body:
             self.visit(stmt)
@@ -485,7 +432,7 @@ class Resolver(Visitor):
 
     def visit_ReturnStmt(self, node: ast.ReturnStmt):
         to_delete = {name: typ.c_name for name, typ in self.names.func_vars().items() if
-                     isinstance(typ.type, cgen.ClassType)}
+                     cgen.is_cls(typ.type)}
         node.meta["to delete"] = to_delete
         return [self.visit(node.expr)]
 
@@ -510,7 +457,7 @@ class Resolver(Visitor):
 
     def visit_GetAttr(self, node: ast.GetAttr):
         obj_type = self.visit(node.obj)
-        if not isinstance(obj_type, cgen.ClassType):
+        if not cgen.is_cls(obj_type):
             raise ResolvingError(f"Can only get attributes on objects, not {obj_type}", node.line, node.pos)
         else:
             try:
@@ -524,7 +471,7 @@ class Resolver(Visitor):
     def visit_SetAttr(self, node: ast.SetAttr):
         # TODO: check if value is valid
         obj_type = self.visit(node.obj)
-        if not isinstance(obj_type, cgen.ClassType):
+        if not cgen.is_cls(obj_type):
             raise ResolvingError("Can only set attributes on objects", node.line, node.pos)
         else:
             try:
@@ -538,7 +485,7 @@ class Resolver(Visitor):
 
     def visit_Call(self, node: ast.Call):
         func_type = self.visit(node.callee)
-        if not isinstance(func_type, cgen.PointerType) or not isinstance(func_type.pointee, cgen.FunctionType):
+        if not cgen.is_func_ptr(func_type):
             raise ResolvingError(f"Callee must be a function, not a {func_type}", node.callee.line, node.callee.pos)
 
         node.meta["func"] = func_type
@@ -547,24 +494,16 @@ class Resolver(Visitor):
         return func_type.pointee.ret
 
     def visit_BinOp(self, node: ast.BinOp):
-        def is_int(typ):
-            return isinstance(typ, cgen.IntType)
-
-        def is_null(typ):
-            return isinstance(typ, cgen.NullType)
-
         left = self.visit(node.left)
         right = self.visit(node.right)
         if node.op in ("+", "-", "*", "/"):
-            if is_int(left) and is_int(right):
-                ret = cgen.IntType()
+            if cgen.is_int(left) and cgen.is_int(right):
+                ret = cgen.Int
             else:
                 raise NotImplementedError(left, right, node.op)
         elif node.op in ("<", ">", ">=", "<=", "==", "!="):
-            if is_int(left) and is_int(right):
-                ret = cgen.BoolType()
-            elif is_null(left) or is_null(right):
-                ret = cgen.BoolType()
+            if cgen.is_int(left) and cgen.is_int(right):
+                ret = cgen.Bool
             else:
                 raise NotImplementedError(left, right, node.op)
         else:
@@ -581,9 +520,9 @@ class Resolver(Visitor):
 
     def visit_Literal(self, node: ast.Literal):
         if node.type == "num":
-            node.meta["ret"] = cgen.IntType()
+            node.meta["ret"] = cgen.Int
             node.meta["val"] = int(node.val)
-            return cgen.IntType()
+            return cgen.Int
         elif node.type == "str":
             node.meta["ret"] = cgen.String
             node.meta["val"] = node.val[1:-1]

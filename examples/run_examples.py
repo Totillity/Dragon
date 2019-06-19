@@ -6,14 +6,14 @@ from dragon.common import DragonError
 DragonError.debug = False
 
 programs = [
-    # 'main_function',
-    # 'hello_world',
-    # 'fibonacci',
-    # 'macros',
-    # 'arrays',
-    # 'imports',
+    'main_function',
+    'hello_world',
+    'fibonacci',
+    'macros',
+    'arrays',
+    'imports',
     'on_delete',
 ]
 
 for program in programs:
-    run_file(Path(program + ".drgn"), delete_c=False)
+    run_file(Path(program + ".drgn"), delete_c=True)

@@ -138,6 +138,17 @@ class Constant(Expression):
             return "NULL"
         else:
             raise Exception(self.val)
+
+
+@dataclass()
+class StrExpr(Expression):
+    s: str
+
+    def format(self, *args, **kwargs):
+        return StrExpr(self.s.format(*args, **kwargs))
+
+    def generate(self):
+        return self.s
 # endregion
 
 
@@ -355,6 +366,18 @@ class Return(Statement):
             return "    " * indent + "return;"
         else:
             return "    "*indent + "return " + self.expr.generate() + ";"
+
+
+@dataclass()
+class StrStmt(Statement):
+    s: str
+
+    def format(self, *args, **kwargs):
+        return StrStmt(self.s.format(*args, **kwargs))
+
+    def generate(self, indent=0):
+        return "    " * indent + self.s
+
 # endregion
 
 
