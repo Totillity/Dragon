@@ -11,7 +11,6 @@ class CompilingError(DragonError):
 
 
 class Compiler(Visitor):
-    # TODO: support reference counting
     # TODO: and also weak refs
     def __init__(self):
         self.main_func = ''
@@ -43,12 +42,12 @@ class Compiler(Visitor):
         self.programs.append(program)
         return program
 
-    def default_of(self, type: cgen.Type):
+    @classmethod
+    def default_of(cls, type: cgen.Type):
         if cgen.is_int(type):
             return cgen.Constant(0)
         else:
             return cgen.Constant(None)
-            # raise Exception(type)
 
     def visit_Import(self, node: ast.Import, is_main=False):
         program: ast.Program = node.meta["program"]
@@ -62,74 +61,38 @@ class Compiler(Visitor):
             clses += self.visit_Class(implement)
         return clses
 
-    def visit_Class(self, node: ast.Class, is_main=False):
-        cls_type: cgen.ClassType = node.meta["type"]
-        has_constructor = node.meta["has_constructor"]
-        has_destructor = False  # TODO: node.meta["has destructor"]
-
-        cls_struct = cgen.Struct(node.meta["c_name"], {
-            'meta': cgen.StructType("BaseObject"),
-
-            **{'parent_'+base.name: base.struct for base in cls_type.bases},
-
-            **cls_type.attrs,
-            **cls_type.methods,
-        })
-
-        cls_type.struct = cls_struct.struct_type
-
-        new_empty = cgen.Function("new_empty_"+node.meta["c_name"], {}, cls_type, [
-            cgen.Declare(cls_type, "obj", cgen.Call(cgen.GetVar("malloc"), [cgen.SizeOf(cls_struct.struct_type)])),
+    @classmethod
+    def new_empty(cls, cls_node: ast.Class, cls_type: cgen.ClassType):
+        new_empty = cgen.Function("new_empty_" + cls_node.meta["c_name"], {}, cls_type, [
+            cgen.Declare(cls_type, "obj", cgen.Call(cgen.GetVar("malloc"), [cgen.SizeOf(cls_type.struct)])),
             cgen.StrStmt(f"obj->meta.self = obj;\n"
                          f"obj->meta.up = obj;\n"
                          f"obj->meta.ref_count = 0;\n"
                          f"obj->meta.ref_ptr = &(obj->meta.ref_count);\n"
-                         f"obj->meta.del = del_{node.meta['c_name']};"),
+                         f"obj->meta.del = del_{cls_node.meta['c_name']};"),
             *(
                 cgen.StrStmt(f"new_parent_{base.name}(&obj->parent_{base.name}, obj, obj);")
                 for base in cls_type.bases
             ),
 
             *(
-                cgen.ExprStmt(cls_type.set_name_expr(cgen.Deref(cgen.GetVar('obj')), attr, self.default_of(attr_type)))
+                cgen.ExprStmt(cls_type.set_name_expr(cgen.Deref(cgen.GetVar('obj')), attr, cls.default_of(attr_type)))
                 for attr, attr_type in cls_type.all_attrs()
             ),
 
             *(
-                cgen.ExprStmt(cls_type.set_name_expr(cgen.Deref(cgen.GetVar("obj")), method_name, cgen.GetVar(method_c_name)))
-                for method_name, method_c_name in node.meta["all methods"].items()
+                cgen.ExprStmt(
+                    cls_type.set_name_expr(cgen.Deref(cgen.GetVar("obj")), method_name, cgen.GetVar(method_c_name)))
+                for method_name, method_c_name in cls_node.meta["all methods"].items()
             ),
             cgen.Return(cgen.GetVar('obj'))
         ])
+        return new_empty
 
-        redirects = []
-        for method_name, method_c_name in node.meta["inherited methods"].items():
-            redirect_type: cgen.PointerType = cls_type.get_name(method_name)
-            assert cgen.is_func_ptr(redirect_type)
-            redirect_to: cgen.FunctionType = redirect_type.pointee
-
-            args = {'_self': cgen.VoidPtr}
-            args.update({"arg_"+str(i): arg_type for i, arg_type in enumerate(redirect_to.args[1:])})
-
-            passed_args = [cgen.Ref(cls_type.cast_for_name_expr(cgen.Deref(cgen.GetVar('self')), method_name))]
-            passed_args.extend(cgen.GetVar("arg_"+str(i)) for i, arg_type in enumerate(redirect_to.args[1:]))
-
-            if isinstance(redirect_to.ret, cgen.VoidType):
-                redirect = cgen.Function(method_c_name, args, redirect_to.ret, [
-                    cgen.Declare(cls_type, 'self', cgen.GetVar('_self')),
-                    cgen.ExprStmt(cgen.Call(cgen.GetVar(cls_type.get_c_name(method_name)), passed_args))
-                ]
-                                         )
-            else:
-                redirect = cgen.Function(method_c_name, args, redirect_to.ret, [
-                    cgen.Declare(cls_type, 'self', cgen.GetVar('_self')),
-                    cgen.Return(cgen.Call(cgen.GetVar(cls_type.get_c_name(method_name)), passed_args))
-                ]
-                                         )
-            redirects.append(redirect)
-
+    @classmethod
+    def new_parent(cls, cls_node: ast.Class, cls_type: cgen.ClassType):
         new_parent = cgen.Function(
-            "new_parent_" + node.meta["c_name"],
+            "new_parent_" + cls_node.meta["c_name"],
             {'parent_ptr': cls_type, 'child_ptr': cgen.VoidPtr, 'self_ptr': cgen.VoidPtr},
             cgen.Void, [
                 cgen.StrStmt("parent_ptr->meta.self = self_ptr;\n"
@@ -140,13 +103,61 @@ class Compiler(Visitor):
                 )
             ]
         )
+        return new_parent
+
+    @classmethod
+    def redirect(cls, cls_type: cgen.ClassType, name: str, func_name: str):
+        redirect_type: cgen.PointerType = cls_type.get_name(name)
+        assert cgen.is_func_ptr(redirect_type)
+        redirect_to: cgen.FunctionType = redirect_type.pointee
+
+        args = {'_self': cgen.VoidPtr, **{f"arg_{i}": arg_type for i, arg_type in enumerate(redirect_to.args[1:])}}
+
+        passed = [cgen.Ref(cls_type.cast_for_name_expr(cgen.Deref(cgen.GetVar('self')), name))] + \
+                 [cgen.GetVar(f"arg_{i}") for i, arg_type in enumerate(redirect_to.args[1:])]
+
+        to_func = cgen.GetVar(cls_type.get_c_name(name))
+
+        is_ret = not cgen.is_void(redirect_to.ret)
+        redirect = cgen.Function(func_name, args, redirect_to.ret, [
+            cgen.StrStmt(f"{cls_type} self = _self;"),
+            (cgen.Return if is_ret else cgen.ExprStmt)(cgen.Call(to_func, passed))
+        ]
+                                 )
+        return redirect
+
+    def visit_Class(self, node: ast.Class, is_main=False):
+        # TODO refactor this?
+
+        cls_type: cgen.ClassType = node.meta["type"]
+        has_constructor = node.meta["has_constructor"]
+        has_destructor = False  # TODO: node.meta["has destructor"]
+
+        cls_struct = cgen.Struct(node.meta["c_name"], {
+            'meta': cgen.StructType("BaseObject"),
+
+            **{'parent_' + base.name: base.struct for base in cls_type.bases},
+
+            **cls_type.attrs,
+            **cls_type.methods,
+        })
+        cls_type.struct = cls_struct.struct_type
+
+        new_empty = self.new_empty(node, cls_type)
+
+        redirects = []
+        for method_name, method_c_name in node.meta["inherited methods"].items():
+            redirect = self.redirect(cls_type, method_name, method_c_name)
+            redirects.append(redirect)
+
+        new_parent = self.new_parent(node, cls_type)
 
         body_stmt_items = []
         for body_stmt in node.body:
             body_stmt_items += self.visit(body_stmt)
 
         if not has_constructor:
-            new = cgen.Function("new_"+node.meta["c_name"], {}, cls_type, [
+            new = cgen.Function("new_" + node.meta["c_name"], {}, cls_type, [
                 cgen.StrStmt(f"{cls_type.with_name('obj')} = new_empty_{cls_type.name}();\n"
                              f"return obj;")
             ])
@@ -154,9 +165,11 @@ class Compiler(Visitor):
             body_stmt_items.append(new)
 
         if not has_destructor:
-            # TODO dec ref the attributes
             del_ = cgen.Function("del_" + node.meta["c_name"], {"obj": cgen.VoidPtr}, cgen.Void, [
-                cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("obj")]))
+                cgen.StrStmt(f"{cls_type} self = obj;"),
+                cgen.dec_refs(cgen.StrExpr(f"self->{attr}")
+                              for attr, typ in cls_type.attrs.items() if cgen.is_cls(typ)),
+                cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("self")]))
             ])
             cls_type.c_names["del"] = del_.name
             body_stmt_items.append(del_)
@@ -189,9 +202,7 @@ class Compiler(Visitor):
         if node.meta["is main"] and is_main:
             self.main_func = node.meta["c_name"]
 
-        body = []
-        for stmt in node.body:
-            body.append(self.visit(stmt))
+        body = [self.visit(stmt) for stmt in node.body]
 
         return [cgen.Function(node.meta["c_name"], node.meta["c args"], node.meta["ret"], body)]
 
@@ -207,7 +218,7 @@ class Compiler(Visitor):
     def visit_VarStmt(self, node: ast.VarStmt):
         val = self.coerce_node(node.val, node.meta["type"])
         if cgen.is_cls(node.val.meta["ret"]):
-            cgen.inc_ref(val)
+            val = cgen.inc_ref(val)
         return cgen.Declare(node.meta["type"], node.meta["c_name"], val)
 
     def visit_ExprStmt(self, node: ast.ExprStmt):
@@ -246,14 +257,13 @@ class Compiler(Visitor):
         args = []
         if isinstance(node.callee, ast.GetAttr):
             obj = node.callee.obj
-            args.append(cgen.GetAttr(cgen.GetArrow(self.visit(obj), 'meta'), 'self'))
+            args.append(cgen.StrExpr(f"{self.visit(obj)}->meta.self"))
             expected_args = node.meta["func"].pointee.args[1:]
         else:
             expected_args = node.meta["func"].pointee.args
 
-        for arg_node, expected in zip(node.args, expected_args):
-            arg = self.coerce_expr(self.visit(arg_node), arg_node.meta["ret"], expected, arg_node)
-            args.append(arg)
+        args += [self.coerce_node(arg_node, expected) for arg_node, expected in zip(node.args, expected_args)]
+
         return cgen.Call(self.visit(node.callee), args)
 
     def visit_GetVar(self, node: ast.GetVar):
@@ -268,11 +278,13 @@ class Compiler(Visitor):
 
     def visit_SetAttr(self, node: ast.SetAttr):
         cls: cgen.ClassType = node.obj.meta["ret"]
+
         expected = cls.get_name(node.attr)
         coerced = self.coerce_node(node.val, expected)
+
         if cgen.is_cls(expected):
             return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr,
-                                     cgen.Call(cgen.GetVar("drgn_inc_ref"), [coerced]))
+                                     cgen.inc_ref(coerced))
         else:
             return cls.set_name_expr(cgen.Deref(self.visit(node.obj)), node.attr, coerced)
 
@@ -286,11 +298,13 @@ class Compiler(Visitor):
             # now force an upcast by calling up enough times to cast to the correct type,
             # but this will cause an error if the actual type is incorrect
             to_type = node.meta["ret"]
-            obj = self.visit(node.obj)
             from_type = node.obj.meta["ret"]
+            obj = self.visit(node.obj)
+
             if not cgen.is_cls(to_type):
                 # TODO: Error message
                 raise Exception()
+
             path = to_type.path_to_parent(from_type)[1:]
 
             for base in path:
@@ -303,6 +317,7 @@ class Compiler(Visitor):
             val: str = node.meta["val"]
             esc_val = val.encode("utf-8").decode("unicode_escape")
             return cgen.StrExpr(f"_new_String(\"{val}\", {len(esc_val)})")
+
         return cgen.Constant(node.meta["val"])
 
     def visit_Grouping(self, node: ast.Grouping):

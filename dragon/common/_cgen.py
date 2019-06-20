@@ -158,6 +158,9 @@ class StrExpr(Expression):
 # region types
 @dataclass()
 class Type(Node, ABC):
+    def __str__(self):
+        return self.as_type(0)
+
     @abstractmethod
     def as_type(self, ptrs=0):
         pass

@@ -213,3 +213,7 @@ C_Array.other = {"new": FuncType([Int], C_Array)}
 C_Array.c_names = {"get_item": "_Array_get_item",
                    "set_item": "_Array_set_item",
                    "new": "new__Array"}
+
+
+def is_void(typ):
+    return typ is Void
