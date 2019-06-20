@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
-
+from typing import Dict, Any, List, Tuple
 
 __all__ = ['Node',
 
@@ -13,7 +12,7 @@ __all__ = ['Node',
 
            'ClassStmt', 'Constructor', 'Attr', 'Method',
 
-           'TopLevel', 'Function', 'Class', 'GenericClass', 'Import',
+           'TopLevel', 'Function', 'Class', 'GenericClass', 'Import', 'OverloadedFunction', 'Overload',
 
            'Program', ]
 
@@ -226,6 +225,19 @@ class Function(TopLevel):
     args: Dict[str, Type]
     ret: Type
     body: List[Stmt]
+
+
+@dataclass()
+class Overload(Node):
+    args: Dict[str, Type]
+    ret: Type
+    body: List[Stmt]
+
+
+@dataclass()
+class OverloadedFunction(TopLevel):
+    name: str
+    overloads: List[Overload]
 
 
 @dataclass()

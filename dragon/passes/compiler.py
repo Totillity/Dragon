@@ -1,6 +1,6 @@
 import os
 import pathlib
-from typing import Dict, Type, List
+from typing import Dict, List
 
 from dragon.common import ast, DragonError, cgen, Visitor
 from dragon.passes.resolver import Resolver
@@ -107,19 +107,19 @@ class Compiler(Visitor):
 
     @classmethod
     def redirect(cls, cls_type: cgen.ClassType, name: str, func_name: str):
-        redirect_type: cgen.PointerType = cls_type.get_name(name)
-        assert cgen.is_func_ptr(redirect_type)
-        redirect_to: cgen.FunctionType = redirect_type.pointee
+        redirect_type: cgen.FuncType = cls_type.get_name(name)
 
-        args = {'_self': cgen.VoidPtr, **{f"arg_{i}": arg_type for i, arg_type in enumerate(redirect_to.args[1:])}}
+        assert isinstance(redirect_type, cgen.SingleFuncType)
+
+        args = {'_self': cgen.VoidPtr, **{f"arg_{i}": arg_type for i, arg_type in enumerate(redirect_type.args[1:])}}
 
         passed = [cgen.Ref(cls_type.cast_for_name_expr(cgen.Deref(cgen.GetVar('self')), name))] + \
-                 [cgen.GetVar(f"arg_{i}") for i, arg_type in enumerate(redirect_to.args[1:])]
+                 [cgen.GetVar(f"arg_{i}") for i, arg_type in enumerate(redirect_type.args[1:])]
 
         to_func = cgen.GetVar(cls_type.get_func_name(name))
 
-        is_ret = not cgen.is_void(redirect_to.ret)
-        redirect = cgen.Function(func_name, args, redirect_to.ret, [
+        is_ret = not cgen.is_void(redirect_type.ret)
+        redirect = cgen.Function(func_name, args, redirect_type.ret, [
             cgen.StrStmt(f"{cls_type} self = _self;"),
             (cgen.Return if is_ret else cgen.ExprStmt)(cgen.Call(to_func, passed))
         ]
@@ -206,6 +206,16 @@ class Compiler(Visitor):
 
         return [cgen.Function(node.meta["c_name"], node.meta["c args"], node.meta["ret"], body)]
 
+    def visit_OverloadedFunction(self, node: ast.OverloadedFunction, is_main=None):
+        overloads = []
+        for overload in node.overloads:
+            body = [self.visit(stmt) for stmt in overload.body]
+
+            func = cgen.Function(overload.meta["c_name"], overload.meta["c args"], overload.meta["ret"], body)
+            overloads.append(func)
+
+        return overloads
+
     def visit_IfStmt(self, node: ast.IfStmt):
         return cgen.If(self.visit(node.cond), self.visit(node.then_do), self.visit(node.else_do))
 
@@ -230,7 +240,7 @@ class Compiler(Visitor):
         return cgen.UnscopedBlock([dels, cgen.Return(self.visit(node.expr))])
 
     def visit_New(self, node: ast.New):
-        return cgen.Call(cgen.GetVar(node.meta["cls"].c_names["new"]), [self.visit(arg) for arg in node.args])
+        return cgen.Call(cgen.GetVar(node.meta["cls"].func_names["new"]), [self.visit(arg) for arg in node.args])
 
     @classmethod
     def coerce_expr(cls, expr: cgen.Expression, from_type: cgen.Type, to_type: cgen.Type, node):
@@ -254,17 +264,22 @@ class Compiler(Visitor):
         return self.coerce_expr(self.visit(node), node.meta["ret"], expected, node)
 
     def visit_Call(self, node: ast.Call):
+        poss_func_type: cgen.FuncType = node.callee.meta["ret"]
+        passed = [arg.meta["ret"] for arg in node.args]
+        func_type = poss_func_type.type_for(passed)
+        func_name = func_type.c_name
+
         args = []
         if isinstance(node.callee, ast.GetAttr):
             obj = node.callee.obj
             args.append(cgen.StrExpr(f"{self.visit(obj)}->meta.self"))
-            expected_args = node.meta["func"].pointee.args[1:]
+            expected_args = node.meta["func"].args[1:]
         else:
-            expected_args = node.meta["func"].pointee.args
+            expected_args = func_type.args
 
         args += [self.coerce_node(arg_node, expected) for arg_node, expected in zip(node.args, expected_args)]
 
-        return cgen.Call(self.visit(node.callee), args)
+        return cgen.Call(cgen.GetVar(func_name), args)
 
     def visit_GetVar(self, node: ast.GetVar):
         return cgen.GetVar(node.meta["c_name"])

@@ -54,6 +54,16 @@ def parsing_method(func):
     return _wrapper
 
 
+def static_parsing_method(func):
+    def _wrapper(stream: Stream):
+        new_stream, node = func(stream)
+        if node is not None:
+            node.place(stream.curr.line, stream.curr.pos)
+        return new_stream, node
+
+    return _wrapper
+
+
 class Macro:
     def __init__(self, start: str, call: List[Token], replace: List[Token]):
         self.start = start
@@ -173,17 +183,21 @@ class Parser:
 
         return stream
 
-    def arguments(self, start: str, stream: Stream, each, end: str) -> (Stream, List):
+    @staticmethod
+    def arguments(start: str, stream: Stream, each, end: str, sep: str = ",") -> (Stream, List):
         args = []
         stream, _ = stream.expect(start)
-        if stream.curr.type != end:
-            while True:
-                stream, arg = each(stream)
-                args.append(arg)
-                if stream.curr.type == ",":
-                    stream, _ = stream.advance()
-                else:
-                    break
+        while True:
+            if stream.curr.type == end:
+                break
+            stream, arg = each(stream)
+            args.append(arg)
+            if stream.curr.type == sep:
+                stream, _ = stream.advance()
+            elif sep == '':
+                pass
+            else:
+                break
         stream, _ = stream.expect(end)
         return stream, args
 
@@ -225,20 +239,33 @@ class Parser:
             s, typ = self.parse_type(s)
             return s, (param_name.text, typ)
 
-        stream, arg_tuples = self.arguments("(", stream, parse_parameter, ")")
-        args = dict(arg_tuples)
-        if stream.curr.type == "->":
-            stream, _ = stream.expect("->")
-            stream, ret = self.parse_type(stream)
+        def parse_tail(s: Stream):
+            s, arg_tuples = self.arguments("(", s, parse_parameter, ")")
+            args = dict(arg_tuples)
+            if s.curr.type == "->":
+                s, _ = s.expect("->")
+                s, ret = self.parse_type(s)
+            else:
+                ret = None
+            body = []
+            s, _ = s.expect("{")
+            while not s.curr.type == "}":
+                s, stmt = self.parse_stmt(s)
+                body.append(stmt)
+            s, _ = s.expect("}")
+            return s, (args, ret, body)
+
+        if stream.curr.type == "(":  # regular function:
+            stream, init_args = parse_tail(stream)
+            return stream, Function(name.text, *init_args)
         else:
-            ret = None
-        body = []
-        stream, _ = stream.expect("{")
-        while not stream.curr.type == "}":
-            stream, stmt = self.parse_stmt(stream)
-            body.append(stmt)
-        stream, _ = stream.expect("}")
-        return stream, Function(name.text, args=args, ret=ret, body=body)
+            @static_parsing_method
+            def parse_overload(s: Stream):
+                s, overload_args = parse_tail(s)
+                return s, Overload(*overload_args)
+
+            stream, overloads = self.arguments("{", stream, parse_overload, "}", sep='')
+            return stream, OverloadedFunction(name.text, overloads)
 
     @parsing_method
     def parse_class(self, stream: Stream) -> (Stream, Class):

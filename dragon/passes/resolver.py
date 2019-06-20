@@ -3,9 +3,9 @@ from __future__ import annotations
 import itertools
 import pathlib
 from dataclasses import dataclass
-from typing import List, Dict, cast, Tuple
+from typing import List, Dict, Tuple
 
-from dragon.common import cgen, ast, DragonError, Visitor
+from dragon.common import cgen, ast, DragonError, Visitor, MutableDict
 from . import parser, scanner
 
 
@@ -121,9 +121,9 @@ class Resolver(Visitor):
     def __init__(self):
         self.names: Environment = Environment(
             {
-                "print": cgen.dragon_function([cgen.Object], cgen.Void),
-                "exit": cgen.dragon_function([cgen.Int], cgen.Void),
-                "is_null": cgen.dragon_function([cgen.Object], cgen.Bool),
+                "print": cgen.SingleFuncType([cgen.Object], cgen.Void, "print"),
+                "exit": cgen.SingleFuncType([cgen.Int], cgen.Void, "exit"),
+                "is_null": cgen.SingleFuncType([cgen.Object], cgen.Bool, "is_null"),
             },
             {
                 "int": cgen.Int,
@@ -135,8 +135,10 @@ class Resolver(Visitor):
             }
         )
 
-        self.names.new_var("clock", cgen.dragon_function([], cgen.Int), builtin=True, c_name='dragon_clock')
-        self.names.new_var("null", cgen.NullType(), builtin=True, c_name='NULL')
+        self.names.new_var("clock", cgen.SingleFuncType([], cgen.Int, "dragon_clock"),
+                           builtin=True, c_name='dragon_clock')
+        self.names.new_var("null", cgen.NullType(),
+                           builtin=True, c_name='NULL')
 
         self.MODULE_MODE = False
 
@@ -204,17 +206,34 @@ class Resolver(Visitor):
 
         for top_level in node.top_level:
             if isinstance(top_level, ast.Function):
-                type = cgen.FuncType([self.visit(arg)
-                                      for _, arg
-                                      in top_level.args.items()], self.visit(top_level.ret))
-                c_name = self.names.new_var(top_level.name, type)
+                c_name = self.names.next(top_level.name)
+                type = cgen.SingleFuncType([self.visit(arg)
+                                            for _, arg
+                                            in top_level.args.items()], self.visit(top_level.ret), c_name)
+                self.names.new_var(c_name, type, builtin=True)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
                 top_level.meta["args"] = {arg_name: arg_type
                                           for arg_name, arg_type
-                                          in zip(top_level.args.keys(), cast(cgen.FunctionType, type.pointee).args)}
+                                          in zip(top_level.args.keys(), type.args)}
                 # noinspection PyUnresolvedReferences
-                top_level.meta["ret"] = type.pointee.ret
+                top_level.meta["ret"] = type.ret
+            elif isinstance(top_level, ast.OverloadedFunction):
+                overloads = MutableDict([])
+                for n, overload in enumerate(top_level.overloads):
+                    overload_type = ({arg: self.visit(typ) for arg, typ in overload.args.items()},
+                                     self.visit(overload.ret))
+                    c_name = self.names.next(top_level.name + "_" + str(n))
+                    overloads[overload_type] = c_name
+                    overload.meta["c_name"] = c_name
+                    overload.meta["n"] = n
+                    overload.meta["args"] = overload_type[0]
+                    overload.meta["ret"] = overload_type[1]
+                type = cgen.OverloadedFuncType(overloads)
+                self.names.new_var(top_level.name, type)
+                top_level.meta["type"] = type
+                top_level.meta["overloads"] = overloads
+
             elif isinstance(top_level, ast.GenericClass):
                 c_name = self.names.next(top_level.name)
                 type = cgen.GenericClassType(c_name, top_level.type_vars, top_level, self.names)
@@ -279,9 +298,9 @@ class Resolver(Visitor):
                 args.extend(self.visit(arg) for arg in body_stmt.args.values())
                 ret = self.visit(body_stmt.ret)
 
-                type = cgen.FuncType(args, ret)
-
                 c_name = self.names.next(body_stmt.name)
+                type = cgen.SingleFuncType(args, ret, c_name)
+
 
                 cls_type.methods[body_stmt.name] = type
                 cls_type.func_names[body_stmt.name] = c_name
@@ -298,9 +317,9 @@ class Resolver(Visitor):
                 args = [self.visit(arg) for arg in body_stmt.args.values()]
                 ret = cls_type
 
-                type = cgen.FuncType(args, ret)
-
                 c_name = self.names.next(node.name + "_new")
+                type = cgen.SingleFuncType(args, ret, c_name)
+
 
                 cls_type.other["new"] = type
                 cls_type.func_names["new"] = c_name
@@ -358,7 +377,6 @@ class Resolver(Visitor):
         old_scope, new_scope = self.names.new_scope("func new")
         self.names: Environment = new_scope
 
-        # self.names.new_var("_self", cgen.VoidPointerType(), builtin=True)
         self.names.new_var('self', node.meta["cls"], builtin=True)
         c_names = self.names.extend_vars(node.meta["other args"])
 
@@ -381,7 +399,7 @@ class Resolver(Visitor):
         old_scope, new_scope = self.names.new_scope(f"func {node.name}")
         self.names: Environment = new_scope
 
-        c_names = self.names.extend_vars({arg: typ for arg, typ in node.meta["args"].items()})
+        c_names = self.names.extend_vars(node.meta["args"])
         node.meta["c args"] = dict(zip(c_names, node.meta["args"].values()))
 
         for stmt in node.body:
@@ -389,6 +407,22 @@ class Resolver(Visitor):
 
         self.names: Environment = old_scope
         # TODO: Return validation
+
+    def visit_OverloadedFunction(self, node: ast.OverloadedFunction):
+        type = node.meta["type"]
+        for overload in node.overloads:
+            returns = []
+
+            old_scope, new_scope = self.names.new_scope(f"func {overload.meta['c_name']}")
+            self.names: Environment = new_scope
+
+            c_names = self.names.extend_vars(overload.meta["args"])
+            overload.meta["c args"] = dict(zip(c_names, overload.meta["args"].values()))
+
+            for stmt in overload.body:
+                returns.extend(self.visit(stmt))
+
+            self.names: Environment = old_scope
 
     def visit_New(self, node: ast.New):
         cls = self.visit(node.cls)
@@ -484,14 +518,16 @@ class Resolver(Visitor):
         return type
 
     def visit_Call(self, node: ast.Call):
-        func_type = self.visit(node.callee)
+        passed = [self.visit(arg) for arg in node.args]
+        func_type: cgen.FuncType = self.visit(node.callee)
+        ret = func_type.ret_for(passed)
         if not cgen.is_func_ptr(func_type):
             raise ResolvingError(f"Callee must be a function, not a {func_type}", node.callee.line, node.callee.pos)
 
         node.meta["func"] = func_type
-        node.meta["args"] = [self.visit(arg) for arg in node.args]
-        node.meta["ret"] = func_type.pointee.ret
-        return func_type.pointee.ret
+        node.meta["args"] = passed
+        node.meta["ret"] = ret
+        return ret
 
     def visit_BinOp(self, node: ast.BinOp):
         left = self.visit(node.left)

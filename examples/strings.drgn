@@ -1,0 +1,8 @@
+
+
+def main() -> int {
+    var start: String = "Hello World!";
+    print(start);
+    print(start.get_item(0));
+    return 0;
+}

@@ -3,17 +3,19 @@ from dragon.run import run_file, Path
 from dragon.common import DragonError
 
 # If you want developer (of Dragon) errors, set debug to True. It will show the python traceback
-DragonError.debug = False
+DragonError.debug = True
 
 programs = [
-    'main_function',
-    'hello_world',
-    'fibonacci',
-    'macros',
-    'arrays',
-    'imports',
-    'on_delete',
-    'classes'
+    # 'main_function',
+    # 'hello_world',
+    # 'fibonacci',
+    # 'macros',
+    # 'arrays',
+    # 'imports',
+    # 'on_delete',
+    # 'classes',
+    # 'strings',
+    'overloading'
 ]
 
 for program in programs:

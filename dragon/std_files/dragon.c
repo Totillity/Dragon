@@ -51,8 +51,9 @@ void del_String(void* obj) {
 struct String* _new_String(char* chars, int len) {
     struct String* obj = malloc(sizeof(struct String));
 
-    (*obj).str = memcpy(calloc(len, sizeof(char)), chars, len);
-    (*obj).len = len;
+    obj->str = memcpy(calloc(len, sizeof(char)), chars, len);
+    obj->len = len;
+    obj->get_item = String_get_item;
 
     obj->meta.self = obj;
     obj->meta.up = obj;
@@ -77,6 +78,12 @@ struct String* new_String(void* _obj) {
 struct String* String_to_string(void* _self) {
     struct String* self = _self;
     return self;
+}
+
+
+struct String* String_get_item(void* _self, int32_t index) {
+    struct String* self = _self;
+    return _new_String(self->str + index, 1);
 }
 
 

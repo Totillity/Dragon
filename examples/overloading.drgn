@@ -1,0 +1,18 @@
+
+
+def make_int {
+    (s: String) -> String {
+        return s;
+    }
+
+    (i: int) -> int {
+        return 2 * i;
+    }
+}
+
+
+def main() -> int {
+    print(make_int(7));
+    print(make_int("hi"));
+    return 0;
+}

@@ -1,14 +1,7 @@
 from typing import Tuple
+from .mutable_dict import MutableDict
 
 from ._cgen import *
-
-
-class VoidPointerType(DataType):
-    typ = 'void*'
-
-
-class StringType(DataType):
-    typ = 'char*'
 
 
 class ClassType(DataType):
@@ -27,6 +20,7 @@ class ClassType(DataType):
 
         self.attrs: Dict[str, Type] = {}
         self.methods: Dict[str, PointerType] = {}
+
         self.other: Dict[str, Type] = {}
         """The type of new, del and other special attributes"""
 
@@ -207,8 +201,81 @@ class CustomType(DataType):
         self.typ = typ
 
 
-def dragon_function(args: List[Type], ret: Type):
-    return PointerType(FunctionType(args, ret))
+class FuncType(Type, ABC):
+    @abstractmethod
+    def ret_for(self, args: List[Type]) -> Type:
+        pass
+
+    @abstractmethod
+    def type_for(self, args: List[Type]) -> 'SingleFuncType':
+        pass
+
+    @abstractmethod
+    def c_name_for(self, args: List[Type]) -> str:
+        pass
+
+
+class SingleFuncType(FuncType, FunctionType):
+    def __init__(self, args: List[Type], ret: Type, c_name: str):
+        super().__init__(args, ret)
+        self.c_name = c_name
+
+    def ret_for(self, args: List[Type]):
+        # TODO argument validation
+        return self.ret
+
+    def type_for(self, args: List[Type]):
+        return self
+
+    def as_type(self, ptrs=0):
+        return super().as_type(ptrs + 1)
+
+    def c_name_for(self, args: List[Type]):
+        return self.c_name
+
+    def with_name(self, name: str, ptrs=0):
+        return super().with_name(name, ptrs + 1)
+
+    def as_func_ret(self, name: str, ptrs=0):
+        return super().as_func_ret(name, ptrs + 1)
+
+    def as_func_ret_def(self, name: str, func_args: Dict[str, Type], ptrs=0):
+        return super().as_func_ret_def(name, func_args, ptrs + 1)
+
+
+class OverloadedFuncType(FuncType):
+    def __init__(self, overloads: MutableDict[Tuple[Dict[str, Type], Type], str]):
+        self.overloads = overloads
+
+    def ret_for(self, args: List[Type]):
+        for overload_args, ret in self.overloads.keys():
+            if [typ for _, typ in overload_args.items()] == args:
+                return ret
+        raise KeyError()
+
+    def type_for(self, args: List[Type]):
+        for (overload_args, ret), c_name in self.overloads.items():
+            if [typ for _, typ in overload_args.items()] == args:
+                return SingleFuncType(args, ret, c_name)
+        raise KeyError()
+
+    def c_name_for(self, args: List[Type]):
+        for (overload_args, ret), c_name in self.overloads.items():
+            if [typ for _, typ in overload_args.items()] == args:
+                return c_name
+        raise KeyError()
+
+    def as_type(self, ptrs=0):
+        raise NotImplementedError()
+
+    def as_func_ret(self, name: str, ptrs=0):
+        raise NotImplementedError()
+
+    def as_func_ret_def(self, name: str, func_args: Dict[str, Type], ptrs=0):
+        raise NotImplementedError()
+
+    def with_name(self, name: str, ptrs=0) -> str:
+        raise NotImplementedError()
 
 
 def is_int(typ):
@@ -220,15 +287,11 @@ def is_cls(typ):
 
 
 def is_func_ptr(typ):
-    return isinstance(typ, PointerType) and isinstance(typ.pointee, FunctionType)
+    return isinstance(typ, FuncType)
 
 
 def is_void(typ):
     return typ is Void
-
-
-def FuncType(args: List[Type], ret: Type):
-    return PointerType(FunctionType(args, ret))
 
 
 def inc_ref(node: Expression) -> Expression:
@@ -256,12 +319,15 @@ Integer = ClassType("Integer", [Object])
 String = ClassType("String", [Object])
 C_Array = ClassType("_Array", [Object])
 
-Object.methods = {"to_string": FuncType([Object], String)}
+Object.methods = {"to_string": SingleFuncType([Object], String, "to_string")}
 Object.func_names = {"to_string": "Object_to_string"}
 
-C_Array.methods = {"get_item": FuncType([C_Array, Int], Object),
-                   "set_item": FuncType([C_Array, Int, Object], Void)}
-C_Array.other = {"new": FuncType([Int], C_Array)}
+String.methods = {"get_item": SingleFuncType([String, Int], String, "get_item")}
+String.func_names = {"get_item": "String_get_item"}
+
+C_Array.methods = {"get_item": SingleFuncType([C_Array, Int], Object, "get_item"),
+                   "set_item": SingleFuncType([C_Array, Int, Object], Void, "set_item")}
+C_Array.other = {"new": SingleFuncType([Int], C_Array, "new")}
 C_Array.func_names = {"get_item": "_Array_get_item",
                       "set_item": "_Array_set_item",
                       "new": "new__Array"}
