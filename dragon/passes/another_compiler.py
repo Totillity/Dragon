@@ -116,7 +116,7 @@ class Compiler(Visitor):
         passed = [cgen.Ref(cls_type.cast_for_name_expr(cgen.Deref(cgen.GetVar('self')), name))] + \
                  [cgen.GetVar(f"arg_{i}") for i, arg_type in enumerate(redirect_to.args[1:])]
 
-        to_func = cgen.GetVar(cls_type.get_c_name(name))
+        to_func = cgen.GetVar(cls_type.get_func_name(name))
 
         is_ret = not cgen.is_void(redirect_to.ret)
         redirect = cgen.Function(func_name, args, redirect_to.ret, [
@@ -161,7 +161,7 @@ class Compiler(Visitor):
                 cgen.StrStmt(f"{cls_type.with_name('obj')} = new_empty_{cls_type.name}();\n"
                              f"return obj;")
             ])
-            cls_type.c_names["new"] = new.name
+            cls_type.func_names["new"] = new.name
             body_stmt_items.append(new)
 
         if not has_destructor:
@@ -171,7 +171,7 @@ class Compiler(Visitor):
                               for attr, typ in cls_type.attrs.items() if cgen.is_cls(typ)),
                 cgen.ExprStmt(cgen.Call(cgen.GetVar("free"), [cgen.GetVar("self")]))
             ])
-            cls_type.c_names["del"] = del_.name
+            cls_type.func_names["del"] = del_.name
             body_stmt_items.append(del_)
 
         return [cls_struct, new_empty, new_parent] + redirects + body_stmt_items

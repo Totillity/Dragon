@@ -284,7 +284,7 @@ class Resolver(Visitor):
                 c_name = self.names.next(body_stmt.name)
 
                 cls_type.methods[body_stmt.name] = type
-                cls_type.c_names[body_stmt.name] = c_name
+                cls_type.func_names[body_stmt.name] = c_name
 
                 body_stmt.meta["cls"] = cls_type
                 body_stmt.meta["type"] = type
@@ -303,7 +303,7 @@ class Resolver(Visitor):
                 c_name = self.names.next(node.name + "_new")
 
                 cls_type.other["new"] = type
-                cls_type.c_names["new"] = c_name
+                cls_type.func_names["new"] = c_name
 
                 body_stmt.meta["cls"] = cls_type
                 body_stmt.meta["type"] = type
@@ -318,7 +318,7 @@ class Resolver(Visitor):
         node.meta["inherited methods"] = {}
         node.meta["all methods"] = {}
         for method in cls_type.methods.keys():
-            node.meta["all methods"][method] = cls_type.c_names[method]
+            node.meta["all methods"][method] = cls_type.func_names[method]
 
         for inherited in inherited_methods(cls_type):
             c_name = self.names.next(node.meta["c_name"]+"_redirect_"+inherited)
