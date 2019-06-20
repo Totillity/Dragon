@@ -210,7 +210,7 @@ class Resolver(Visitor):
                 type = cgen.SingleFuncType([self.visit(arg)
                                             for _, arg
                                             in top_level.args.items()], self.visit(top_level.ret), c_name)
-                self.names.new_var(c_name, type, builtin=True)
+                self.names.new_var(top_level.name, type, builtin=True, c_name=c_name)
                 top_level.meta["type"] = type
                 top_level.meta["c_name"] = c_name
                 top_level.meta["args"] = {arg_name: arg_type
@@ -301,8 +301,8 @@ class Resolver(Visitor):
                 c_name = self.names.next(body_stmt.name)
                 type = cgen.SingleFuncType(args, ret, c_name)
 
-
-                cls_type.methods[body_stmt.name] = type
+                if not cls_type.has_name(body_stmt.name):
+                    cls_type.methods[body_stmt.name] = type
                 cls_type.func_names[body_stmt.name] = c_name
 
                 body_stmt.meta["cls"] = cls_type
@@ -320,7 +320,6 @@ class Resolver(Visitor):
                 c_name = self.names.next(node.name + "_new")
                 type = cgen.SingleFuncType(args, ret, c_name)
 
-
                 cls_type.other["new"] = type
                 cls_type.func_names["new"] = c_name
 
@@ -336,13 +335,18 @@ class Resolver(Visitor):
 
         node.meta["inherited methods"] = {}
         node.meta["all methods"] = {}
-        for method in cls_type.methods.keys():
-            node.meta["all methods"][method] = cls_type.func_names[method]
 
         for inherited in inherited_methods(cls_type):
-            c_name = self.names.next(node.meta["c_name"]+"_redirect_"+inherited)
+            if inherited in cls_type.func_names:
+                c_name = cls_type.func_names[inherited]
+            else:
+                c_name = self.names.next(node.meta["c_name"] + "_redirect_" + inherited)
+                node.meta["inherited methods"][inherited] = c_name
             node.meta["all methods"][inherited] = c_name
-            node.meta["inherited methods"][inherited] = c_name
+
+        for method in cls_type.methods.keys():
+            if method not in node.meta["inherited methods"]:
+                node.meta["all methods"][method] = cls_type.func_names[method]
 
         for body_stmt in node.body:
             self.visit(body_stmt)

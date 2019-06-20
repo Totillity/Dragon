@@ -264,22 +264,26 @@ class Compiler(Visitor):
         return self.coerce_expr(self.visit(node), node.meta["ret"], expected, node)
 
     def visit_Call(self, node: ast.Call):
-        poss_func_type: cgen.FuncType = node.callee.meta["ret"]
-        passed = [arg.meta["ret"] for arg in node.args]
-        func_type = poss_func_type.type_for(passed)
-        func_name = func_type.c_name
-
         args = []
         if isinstance(node.callee, ast.GetAttr):
             obj = node.callee.obj
             args.append(cgen.StrExpr(f"{self.visit(obj)}->meta.self"))
             expected_args = node.meta["func"].args[1:]
+
+            args += [self.coerce_node(arg_node, expected) for arg_node, expected in zip(node.args, expected_args)]
+
+            return cgen.Call(self.visit(node.callee), args)
         else:
+            poss_func_type: cgen.FuncType = node.callee.meta["ret"]
+            passed = [arg.meta["ret"] for arg in node.args]
+            func_type = poss_func_type.type_for(passed)
+
+            func_name = func_type.c_name
             expected_args = func_type.args
 
-        args += [self.coerce_node(arg_node, expected) for arg_node, expected in zip(node.args, expected_args)]
+            args += [self.coerce_node(arg_node, expected) for arg_node, expected in zip(node.args, expected_args)]
 
-        return cgen.Call(cgen.GetVar(func_name), args)
+            return cgen.Call(cgen.GetVar(func_name), args)
 
     def visit_GetVar(self, node: ast.GetVar):
         return cgen.GetVar(node.meta["c_name"])

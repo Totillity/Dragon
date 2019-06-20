@@ -33,6 +33,9 @@ class ClassType(DataType):
     def names(self):
         return tuple(self.attrs.keys()) + tuple(self.methods.keys()) + tuple(self.other.keys())
 
+    def add_name(self, name: str, ):
+        pass
+
     def has_name(self, name: str):
         if name in self.names:
             return True
@@ -92,7 +95,7 @@ class ClassType(DataType):
         Raises:
             KeyError: If `name` is not an attribute of this class or any of its bases
         """
-        if name in self.func_names or name in self.attrs:
+        if name in self.methods or name in self.attrs:
             return GetAttr(obj, name)
         else:
             for base in self.bases:
@@ -114,7 +117,7 @@ class ClassType(DataType):
         Raises:
             KeyError: If `name` is not an attribute of this class or any of its bases
         """
-        if name in self.func_names or name in self.attrs:
+        if name in self.methods or name in self.attrs:
             return SetAttr(obj, name, val)
         else:
             for base in self.bases:
@@ -319,14 +322,14 @@ Integer = ClassType("Integer", [Object])
 String = ClassType("String", [Object])
 C_Array = ClassType("_Array", [Object])
 
-Object.methods = {"to_string": SingleFuncType([Object], String, "to_string")}
+Object.methods = {"to_string": SingleFuncType([Object], String, "Object_to_string")}
 Object.func_names = {"to_string": "Object_to_string"}
 
-String.methods = {"get_item": SingleFuncType([String, Int], String, "get_item")}
+String.methods = {"get_item": SingleFuncType([String, Int], String, "String_get_item")}
 String.func_names = {"get_item": "String_get_item"}
 
-C_Array.methods = {"get_item": SingleFuncType([C_Array, Int], Object, "get_item"),
-                   "set_item": SingleFuncType([C_Array, Int, Object], Void, "set_item")}
+C_Array.methods = {"get_item": SingleFuncType([C_Array, Int], Object, "_Array_get_item"),
+                   "set_item": SingleFuncType([C_Array, Int, Object], Void, "_Array_set_item")}
 C_Array.other = {"new": SingleFuncType([Int], C_Array, "new")}
 C_Array.func_names = {"get_item": "_Array_get_item",
                       "set_item": "_Array_set_item",
