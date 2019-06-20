@@ -179,6 +179,14 @@ def FuncType(args: List[Type], ret: Type):
     return PointerType(FunctionType(args, ret))
 
 
+def inc_ref(node: Expression) -> Expression:
+    return Call(GetVar("drgn_inc_ref"), [node])
+
+
+def dec_refs(nodes: Iterable[Expression]) -> Statement:
+    return UnscopedBlock([ExprStmt(Call(GetVar("DRGN_DECREF"), [node])) for node in nodes])
+
+
 CInt = IntType()
 
 Void = VoidType()

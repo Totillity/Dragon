@@ -13,6 +13,9 @@ class Node(ABC):
 # region expressions
 @dataclass()
 class Expression(Node, ABC):
+    def __str__(self):
+        return self.generate()
+
     @abstractmethod
     def generate(self):
         return self.generate()
