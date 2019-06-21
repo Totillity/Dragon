@@ -1,3 +1,8 @@
+# TODO: Refactor ast meta into something better, or make documentation the keys
+# TODO: Fix reference counting (objects should be incremented when they enter a function,
+#  decremented when they leave, but NOT WHEN THEY ARE RETURNED)
+# TODO: Finish refactoring into spring (file extensions, this file, dragon.c, etc)
+
 import pathlib
 
 from spring.run import run_file, compile_file

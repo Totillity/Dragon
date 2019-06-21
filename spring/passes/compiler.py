@@ -127,7 +127,7 @@ class Compiler(Visitor):
         return redirect
 
     def visit_Class(self, node: ast.Class, is_main=False):
-        # TODO refactor this?
+        # TODO refactor this more?
 
         cls_type: cgen.ClassType = node.meta["type"]
         has_constructor = node.meta["has_constructor"]
