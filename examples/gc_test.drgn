@@ -1,0 +1,11 @@
+
+
+def identity(obj: String) -> String {
+    return obj;
+}
+
+
+def main() -> int {
+    print(identity(identity("Hi")));
+    return 0;
+}

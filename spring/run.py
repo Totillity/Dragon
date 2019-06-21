@@ -1,14 +1,14 @@
 import os
 from pathlib import Path
 
-from dragon.passes import compile_drgn, parse, scan
-from dragon.common import DragonError
+from spring.passes import compile_drgn, parse, scan
+from spring.common import SpringError
 
 __all__ = ['run_file', 'compile_file',
            'Path']
 
 
-class CompilingError(DragonError):
+class CompilingError(SpringError):
     pass
 
 
@@ -18,7 +18,7 @@ def compile_file(path: Path, compiler='clang', delete_c=True):
 
     try:
         unit = compile_drgn(parse(scan(contents)), path)
-    except DragonError as e:
+    except SpringError as e:
         e.finish('<string>', contents)
         raise
 
@@ -52,7 +52,7 @@ def run_file(path: Path, compiler='clang', delete_c=True, delete_exe=True):
 
     try:
         unit = compile_drgn(parse(scan(contents)), path)
-    except DragonError as e:
+    except SpringError as e:
         e.finish('<string>', contents)
         raise
 

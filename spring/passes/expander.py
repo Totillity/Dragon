@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from dragon.common import ast, Visitor
+from spring.common import ast, Visitor
 
 
 class Expander(Visitor):

@@ -2,11 +2,11 @@ import os
 import pathlib
 from typing import Dict, List
 
-from dragon.common import ast, DragonError, cgen, Visitor
-from dragon.passes.resolver import Resolver
+from spring.common import ast, SpringError, cgen, Visitor
+from spring.passes.resolver import Resolver
 
 
-class CompilingError(DragonError):
+class CompilingError(SpringError):
     pass
 
 

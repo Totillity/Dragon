@@ -5,11 +5,11 @@ import pathlib
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
 
-from dragon.common import cgen, ast, DragonError, Visitor, MutableDict
+from spring.common import cgen, ast, SpringError, Visitor, MutableDict
 from . import parser, scanner
 
 
-class ResolvingError(DragonError):
+class ResolvingError(SpringError):
     pass
 
 

@@ -1,4 +1,4 @@
-from .dragon_ast import Node
+from .spring_ast import Node
 
 
 class Visitor:

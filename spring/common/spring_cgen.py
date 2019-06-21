@@ -25,7 +25,7 @@ class ClassType(DataType):
         """The type of new, del and other special attributes"""
 
         self.func_names: Dict[str, str] = {}
-        """A dict mapping the dragon name of a method or other to the c function name where it's implemented"""
+        """A dict mapping the spring name of a method or other to the c function name where it's implemented"""
 
         self.struct = StructType(name)
 

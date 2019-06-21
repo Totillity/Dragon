@@ -1,7 +1,7 @@
 import sys
 
 
-class DragonError(Exception):
+class SpringError(Exception):
     debug = False
 
     def __init__(self, message, line, line_pos: (int, int)):

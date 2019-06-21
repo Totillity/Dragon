@@ -1,9 +1,9 @@
-from dragon.run import run_file, Path
+from spring.run import run_file, Path
 
-from dragon.common import DragonError
+from spring.common import SpringError
 
 # If you want developer (of Dragon) errors, set debug to True. It will show the python traceback
-DragonError.debug = False
+SpringError.debug = False
 
 programs = [
     'main_function',
@@ -15,7 +15,8 @@ programs = [
     'on_delete',
     'classes',
     'strings',
-    'overloading'
+    'overloading',
+    'gc_test',
 ]
 
 for program in programs:

@@ -3,12 +3,12 @@ from typing import List
 
 import re
 
-from dragon.common import DragonError, Token
+from spring.common import SpringError, Token
 
 ORDER = "START"
 
 
-class ScanningError(DragonError):
+class ScanningError(SpringError):
     pass
 
 

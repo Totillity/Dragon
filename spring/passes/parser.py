@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import List, Dict
 
-from dragon.common.dragon_ast import *
+from spring.common.spring_ast import *
 
-from dragon.common import Token, DragonError
+from spring.common import Token, SpringError
 
 ORDER = "AFTER scanner"
 
 
-class ParseError(DragonError):
+class ParseError(SpringError):
     pass
 
 
